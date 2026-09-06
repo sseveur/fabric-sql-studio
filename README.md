@@ -10,7 +10,7 @@ A powerful Visual Studio Code extension for Google BigQuery. Browse datasets and
 
 ## Features
 
-- **Authentication** - User login, GDrive access, and service account support via gcloud CLI
+- **Authentication** - Sign in with a Microsoft (Entra ID) account via the VS Code Accounts menu, or reuse an Azure CLI login
 - **Project Explorer** - Browse projects, datasets, tables, views, functions, and ML models; pin/hide projects; pin tables; copy fully-qualified paths; table search across all datasets (cached index)
 - **Query Execution** - Run queries with `Ctrl+Enter`, real-time error highlighting, byte estimation, and automatic region detection
 - **Results Grid** - Modern Preact-based grid with multi-column sort, find-in-page, schema tab, cell drawer, drag-resize, row selection with TSV/Markdown copy, density toggle, and customizable per-type cell colors
@@ -40,33 +40,25 @@ Or install from the [VS Code Marketplace](https://marketplace.visualstudio.com/i
 
 ## Requirements
 
-- [Google Cloud SDK (gcloud CLI)](https://cloud.google.com/sdk/docs/install) must be installed
-- Valid Google Cloud authentication with BigQuery permissions
+- A Microsoft Entra ID account with access to the target SQL Server / Fabric workspace (or an `az login` session)
 
 ## Quick Start
 
-1. Install the gcloud CLI and authenticate: `gcloud auth login`
+1. Open the Authentication view and click **Sign in with Microsoft**
 2. Open the BigQuery panel from the Activity Bar
 3. Create a new `.bqsql` file and write your query
 4. Press `Ctrl+Enter` to run
 
 ## Authentication
 
-The extension uses the [gcloud CLI](https://cloud.google.com/sdk/docs/install) for authentication. Three authentication methods are supported:
+Tokens come from Entra ID. Two modes, switchable from the Authentication view or the `vscode-bigquery.authMode` setting:
 
-<img src="https://raw.githubusercontent.com/sseveur/vscode-bigquery/main/documentation/authentication_panel.png" alt="authentication panel" width="300"/>
+- **Sign in with Microsoft** - Uses VS Code's built-in Microsoft account provider. Sign-out and account switching happen in the VS Code **Accounts** menu (bottom left).
+- **Azure CLI** - Reuses an existing `az login` session. Requires the Azure CLI on PATH.
 
-- **User login** - Opens browser for Google Cloud authentication
-- **User login + GDrive** - Same as above, with Google Drive access for Drive-based tables
-- **Service account** - Select a service account key file (JSON format)
+Set `vscode-bigquery.tenantId` when your account lives in a tenant other than its home tenant.
 
-When there's a valid account active with BigQuery permissions, the extension is ready to use.
-
-Additional functionality:
-- Activate/switch between multiple accounts
-- Revoke authentication
-
-Refresh the authentication screen with the command `BigQuery: Authentication refresh`.
+`BigQuery: Show Auth Token Info` prints audience / tenant / expiry (never the token) for both the SQL and Fabric scopes — use it to check that sign-in actually produced a usable token.
 
 ## Projects, Datasets, and Tables Explorer
 
@@ -392,13 +384,10 @@ All commands are available via the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+
 | Command | Description |
 |---------|-------------|
 | **Authentication** | |
-| BigQuery: User Login | Sign in with Google account (opens browser) |
-| BigQuery: User Login with Google Drive | Sign in with Google Drive access for Drive-based tables |
-| BigQuery: User Login via Console | Sign in without browser (for remote/headless environments) |
-| BigQuery: Service Account Login | Authenticate with a service account JSON key file |
-| BigQuery: Initialize gcloud | Run `gcloud init` to configure the CLI |
+| BigQuery: Sign In | Sign in with a Microsoft account (or acquire an Azure CLI token) |
+| BigQuery: Show Auth Token Info | Print audience / tenant / expiry for the SQL and Fabric scopes |
 | BigQuery: Refresh Authentication | Refresh the authentication panel |
-| BigQuery: Revoke Session | Sign out from a Google account |
+| BigQuery: Sign Out | Forget cached tokens and the preferred account |
 | **Query Execution** | |
 | BigQuery: Run Query | Execute the entire query (`Ctrl+Enter`) |
 | BigQuery: Run Selected Query | Execute selected text only (`Ctrl+E`) |
@@ -520,7 +509,8 @@ Setting: `vscode-bigquery.associateSqlFiles`
 | `vscode-bigquery.defaultLocation` | string | `""` | BQ processing location (US, EU, australia-southeast1, asia-east1, …). Empty = auto-detect from first FROM via `datasets.get`. Set to override for unqualified or CTE-only queries. |
 | `vscode-bigquery.copyTablePathBackticks` | boolean | `true` | Wrap copied table paths in backticks (\`project.dataset.table\`) for direct paste into FROM clauses. Set to `false` for raw `project.dataset.table`. |
 | `vscode-bigquery.gridColors` | object | `{}` | Override per-type cell text colors in the results grid. See [Color Customization](#color-customization) |
-| `vscode-bigquery.gcloudPath` | string | `""` | Full path to the gcloud executable. Empty = auto-detect from PATH and common install locations. Set if VS Code can't find gcloud when launched from the Dock/Finder. |
+| `vscode-bigquery.authMode` | string | `entra-interactive` | `entra-interactive` (Microsoft account via VS Code) or `azure-cli` (reuse `az login`). |
+| `vscode-bigquery.tenantId` | string | `""` | Entra tenant ID to sign in to. Empty = home tenant. |
 | `vscode-bigquery.enableCtePreviewCodeLens` | boolean | `true` | Show a clickable "Preview CTE" link above each CTE in a `WITH` clause |
 | `vscode-bigquery.ctePreviewRowLimit` | number | `100` | Row limit when previewing a CTE via the CodeLens |
 
@@ -536,7 +526,7 @@ Sometimes after installation, the `BigQuery: Run query` command doesn't open the
 
 ### Authentication issues
 
-Ensure the gcloud CLI is properly installed and you've run `gcloud auth login` successfully.
+Run `BigQuery: Show Auth Token Info`. If it reports no session, sign in from the Authentication view; if the audience is wrong, check `vscode-bigquery.tenantId`. In Azure CLI mode make sure `az account get-access-token` works in a terminal first.
 
 ### Missing projects or datasets
 

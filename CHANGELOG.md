@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - Fabric / SQL Server port
 
+### Changed
+
+- **Authentication is now Entra ID** - Sign in with a Microsoft account through VS Code's built-in Accounts menu, or reuse an `az login` session (`vscode-bigquery.authMode`, `vscode-bigquery.tenantId`). New `BigQuery: Show Auth Token Info` command prints audience / tenant / expiry for the SQL and Fabric scopes. The gcloud CLI is no longer required and `gcloudPath` is gone.
+
 ### Removed
+
+- **gcloud-based auth** - User Login with Google Drive, User Login via Console, Service Account Login, Initialize gcloud, Activate/Remove User, and the Troubleshoot page.
 
 - **Pub/Sub export** - The "Send to Pub/Sub" command, grid button and `@google-cloud/pubsub` dependency are gone; there is no equivalent on the Fabric / SQL Server targets this branch is moving to.
 - **Dead code** - Deleted the unbuildable `resultsGrid.tsxxx`, the duplicate `resultsGridRenderRequest.d.ts`, the scratch `commands.txt`, and all commented-out telemetry wiring.

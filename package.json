@@ -23,7 +23,6 @@
 		"onView:bigquery-main-activity-bar",
 		"onWebviewPanel:bigquery-query-results",
 		"onWebviewPanel:bigquery-table-results",
-		"onWebviewPanel:authentication-troubleshoot",
 		"onLanguage:sql"
 	],
 	"main": "./dist/extension.js",
@@ -48,13 +47,23 @@
 						"title": "Auto-Reveal Results Panel",
 						"description": "Automatically reveal the results panel when switching to a BigQuery SQL file that has results. Disable to prevent focus switching."
 					},
-					"vscode-bigquery.gcloudPath": {
+					"vscode-bigquery.authMode": {
+						"type": "string",
+						"enum": ["entra-interactive", "azure-cli"],
+						"enumDescriptions": ["Sign in with a Microsoft account through the VS Code Accounts menu.", "Reuse the token from an existing az login session (Azure CLI must be installed)."],
+						"default": "entra-interactive",
+						"scope": "machine-overridable",
+						"order": 3,
+						"title": "Authentication Mode",
+						"description": "How Entra ID tokens are obtained for SQL Server / Fabric."
+					},
+					"vscode-bigquery.tenantId": {
 						"type": "string",
 						"default": "",
 						"scope": "machine-overridable",
-						"order": 3,
-						"title": "gcloud Executable Path",
-						"description": "Full path to the gcloud executable. Leave empty to auto-detect from PATH and common install locations (/opt/homebrew/bin, /usr/local/bin, ~/google-cloud-sdk/bin). Set this if VS Code cannot find gcloud when launched from the Dock/Finder."
+						"order": 4,
+						"title": "Entra Tenant ID",
+						"description": "Tenant (directory) ID to sign in to. Leave empty for your home tenant."
 					},
 					"vscode-bigquery.defaultLocation": {
 						"type": "string",
@@ -466,38 +475,16 @@
 			},
 			{
 				"command": "vscode-bigquery.user-login",
-				"title": "BigQuery: User Login"
+				"title": "BigQuery: Sign In"
 			},
 			{
-				"command": "vscode-bigquery.service-account-login",
-				"title": "BigQuery: Service Account Login"
-			},
-			{
-				"command": "vscode-bigquery.user-login-no-launch-browser",
-				"title": "BigQuery: User Login via Console"
-			},
-			{
-				"command": "vscode-bigquery.user-login-drive",
-				"title": "BigQuery: User Login with Google Drive"
-			},
-			{
-				"command": "vscode-bigquery.gcloud-init",
-				"title": "BigQuery: Initialize gcloud"
+				"command": "vscode-bigquery.auth-token-info",
+				"title": "BigQuery: Show Auth Token Info"
 			},
 			{
 				"command": "vscode-bigquery.authentication-refresh",
 				"title": "BigQuery: Refresh Authentication",
 				"icon": "$(refresh)"
-			},
-			{
-				"command": "vscode-bigquery.gcp-user-activate",
-				"title": "BigQuery: Activate User",
-				"icon": "$(check)"
-			},
-			{
-				"command": "vscode-bigquery.gcp-user-remove",
-				"title": "BigQuery: Remove User",
-				"icon": "$(close)"
 			},
 			{
 				"command": "vscode-bigquery.explorer-refresh",
@@ -557,10 +544,6 @@
 				"command": "vscode-bigquery.copy-to-clipboard",
 				"title": "BigQuery: Copy to Clipboard",
 				"icon": "$(clippy)"
-			},
-			{
-				"command": "vscode-bigquery.troubleshoot",
-				"title": "BigQuery: Troubleshoot"
 			},
 			{
 				"command": "vscode-bigquery.open-settings-projects",
@@ -642,7 +625,7 @@
 			},
 			{
 				"command": "vscode-bigquery.revoke-session",
-				"title": "BigQuery: Revoke Session",
+				"title": "BigQuery: Sign Out",
 				"icon": "$(sign-out)"
 			},
 			{
@@ -845,16 +828,6 @@
 					"when": "viewItem == 'bq-table' || viewItem == 'bq-pinned-table' || viewItem == 'bq-table-already-pinned'"
 				},
 				{
-					"command": "vscode-bigquery.gcp-user-activate",
-					"when": "viewItem == 'gcp-user'",
-					"group": "inline"
-				},
-				{
-					"command": "vscode-bigquery.gcp-user-remove",
-					"when": "viewItem == 'gcp-user'",
-					"group": "inline"
-				},
-				{
 					"command": "vscode-bigquery.set-default-project",
 					"when": "viewItem == 'bq-gcp-project'",
 					"group": "inline"
@@ -944,7 +917,7 @@
 		"viewsWelcome": [
 			{
 				"view": "bigquery-tree-data-provider",
-				"contents": "No Google Cloud projects found or still loading.\n\nIf you are presented with an error, please try to find your problem in the [troubleshoot](command:vscode-bigquery.troubleshoot) guide.\nIf the permissions to GCP were given to dataset or table level (not project), it's possible to specify the project (of the target dataset) and/or table in the settings.\n[Add Project directly in Settings](command:vscode-bigquery.open-settings-projects)\n[Add Table directly in Settings](command:vscode-bigquery.open-settings-tables)"
+				"contents": "No projects found or still loading.\n\nSign in first from the Authentication view above.\nIf the permissions to GCP were given to dataset or table level (not project), it's possible to specify the project (of the target dataset) and/or table in the settings.\n[Add Project directly in Settings](command:vscode-bigquery.open-settings-projects)\n[Add Table directly in Settings](command:vscode-bigquery.open-settings-tables)"
 			}
 		]
 	},
@@ -983,6 +956,7 @@
 		"webpack-cli": "^5.1.4"
 	},
 	"dependencies": {
+		"@azure/identity": "^4.13.2",
 		"@bstruct/bqsql-parser": "file://.//bqsql_parser/pkg",
 		"@google-cloud/bigquery": "^7.9.3",
 		"@types/gapi.client.bigquery-v2": "^0.0.2",

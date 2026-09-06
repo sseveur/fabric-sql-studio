@@ -32,7 +32,7 @@ export class BqSqlNotebookController implements vscode.Disposable {
     private readonly messaging: vscode.NotebookRendererMessaging;
     private readonly messagingListener: vscode.Disposable;
     /** Authenticated clients reused across load-more page fetches, keyed by project id. Avoids
-     *  re-running `gcloud` + rebuilding auth on every page (the source of paging lag). */
+     *  re-acquiring a token + rebuilding the client on every page (the source of paging lag). */
     private readonly clientCache = new Map<string, BigQueryClient>();
 
     constructor(registry: CellRegistry, historyService?: QueryHistoryService) {
@@ -56,7 +56,7 @@ export class BqSqlNotebookController implements vscode.Disposable {
             if (m.type === 'bq-fetch-page') {
                 try {
                     // Use the project from the job reference (already known) and a cached client — no
-                    // gcloud lookup or client rebuild per page, so paging matches the webview's latency.
+                    // token lookup or client rebuild per page, so paging matches the webview's latency.
                     const rows = await this.clientFor(m.job.projectId).getQueryPageWire(m.job, m.startIndex, m.pageSize);
                     await this.messaging.postMessage({ type: 'bq-page', requestId: m.requestId, rows }, e.editor);
                 } catch (err: any) {

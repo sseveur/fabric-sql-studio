@@ -3,6 +3,7 @@ import { Uri, StatusBarItem, ExtensionContext } from 'vscode';
 import { BigqueryAuthenticationWebviewViewProvider } from './activitybar/authenticationWebviewViewProvider';
 import { BigQueryTreeDataProvider } from './activitybar/treeDataProvider';
 import * as commands from './extensionCommands';
+import { Authentication } from './services/authentication';
 import { WebviewViewProvider } from './tableResultsPanel/webviewViewProvider';
 import { BqsqlCompletionItemProvider } from './language/bqsqlCompletionItemProvider';
 import { BqsqlDocumentSemanticTokensProvider } from './language/bqsqlDocumentSemanticTokensProvider';
@@ -18,8 +19,6 @@ import { QueryResultsMappingService } from './services/queryResultsMappingServic
 import { TableResultsSerializer } from './tableResultsPanel/tableResultsSerializer';
 import { ResultsRender } from './services/resultsRender';
 import { QueryResultsVisualizationType } from './services/queryResultsVisualizationType';
-import { TroubleshootSerializer } from './activitybar/troubleshootSerializer';
-import { GcpAuthenticationTreeDataProvider } from './activitybar/gcpAuthenticationTreeDataProvider';
 import { isBigQueryLanguage } from './services/languageUtils';
 import { QueryHistoryTreeDataProvider } from './activitybar/queryHistoryTreeDataProvider';
 import { JobHistoryTreeDataProvider } from './activitybar/jobHistoryTreeDataProvider';
@@ -30,13 +29,11 @@ import { registerNotebookPersistence } from './notebook/bqSqlNotebookPersistence
 
 export const bigqueryWebviewViewProvider = new WebviewViewProvider();
 export const authenticationWebviewProvider = new BigqueryAuthenticationWebviewViewProvider();
-export const gcpAuthenticationTreeDataProvider = new GcpAuthenticationTreeDataProvider();
 export const bigQueryTreeDataProvider = new BigQueryTreeDataProvider();
 export const bigqueryTableSchemaService = new BigqueryTableSchemaService();
 
 export const QUERY_RESULTS_VIEW_TYPE = "bigquery-query-results";
 export const TABLE_RESULTS_VIEW_TYPE = "bigquery-table-results";
-export const TROUBLESHOOT_VIEW_TYPE = "authentication-troubleshoot";
 
 let statusBarInfo: StatusBarItem | null;
 export function getStatusBarInfo(): StatusBarItem | null {
@@ -51,6 +48,7 @@ export function getExtensionUri(): Uri {
 export function activate(context: ExtensionContext) {
 
 	extensionUri = context.extensionUri;
+	Authentication.init(context.globalState);
 
 	let queryResultsWebviewMapping: Map<string, ResultsRender> = new Map<string, ResultsRender>();
 
@@ -118,43 +116,8 @@ export function activate(context: ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
-			commands.COMMAND_USER_LOGIN_WITH_DRIVE,
-			commands.commandUserLoginWithDrive
-		)
-	);
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand(
-			commands.COMMAND_USER_LOGIN_NO_LAUNCH_BROWSER,
-			commands.commandUserLoginNoLaunchBrowser
-		)
-	);
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand(
-			commands.COMMAND_SERVICE_ACCOUNT_LOGIN,
-			commands.commandServiceAccountLogin
-		)
-	);
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand(
-			commands.COMMAND_USER_ACTIVATE,
-			commands.commandGcpUserActivate
-		)
-	);
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand(
-			commands.COMMAND_USER_REMOVE,
-			commands.commandGcpUserRemove
-		)
-	);
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand(
-			commands.COMMAND_GCLOUD_INIT,
-			commands.commandGCloudInit
+			commands.COMMAND_AUTH_TOKEN_INFO,
+			commands.commandAuthTokenInfo
 		)
 	);
 
@@ -249,13 +212,6 @@ export function activate(context: ExtensionContext) {
 		vscode.commands.registerCommand(
 			commands.COMMAND_SHOW_HIDDEN_PROJECTS,
 			commands.commandShowHiddenProjects
-		)
-	);
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand(
-			commands.AUTHENTICATION_TROUBLESHOOT,
-			commands.commandAuthenticationTroubleshoot
 		)
 	);
 
@@ -479,13 +435,6 @@ export function activate(context: ExtensionContext) {
 			{ webviewOptions: { retainContextWhenHidden: true } }
 		)
 	);
-	// Tree view alternative (disabled):
-	// context.subscriptions.push(
-	// 	vscode.window.registerTreeDataProvider(
-	// 		'bigquery-authentication',
-	// 		gcpAuthenticationTreeDataProvider
-	// 	)
-	// );
 
 	//bigquery-tree-data-provider
 	context.subscriptions.push(
@@ -508,14 +457,6 @@ export function activate(context: ExtensionContext) {
 		vscode.window.registerWebviewPanelSerializer(
 			TABLE_RESULTS_VIEW_TYPE,
 			new TableResultsSerializer()
-		)
-	);
-
-	//troubleshoot
-	context.subscriptions.push(
-		vscode.window.registerWebviewPanelSerializer(
-			TROUBLESHOOT_VIEW_TYPE,
-			new TroubleshootSerializer()
 		)
 	);
 

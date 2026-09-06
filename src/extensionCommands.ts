@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { BigQueryClient } from './services/bigqueryClient';
-import { bigQueryTreeDataProvider, QUERY_RESULTS_VIEW_TYPE, TABLE_RESULTS_VIEW_TYPE, TROUBLESHOOT_VIEW_TYPE, gcpAuthenticationTreeDataProvider, authenticationWebviewProvider, bigqueryTableSchemaService } from './extension';
+import { bigQueryTreeDataProvider, QUERY_RESULTS_VIEW_TYPE, TABLE_RESULTS_VIEW_TYPE, authenticationWebviewProvider, bigqueryTableSchemaService } from './extension';
 import { Authentication } from './services/authentication';
+import { describeToken, getAccessToken, SCOPE_FABRIC, SCOPE_TDS, signIn, signOut } from './services/auth';
 import { BigqueryTreeItem, BigqueryTreeItemType } from './activitybar/bigqueryTreeItem';
 import { SchemaRender } from './tableResultsPanel/schemaRender';
 import { QueryGeneratorService } from './services/queryGeneratorService';
@@ -14,12 +15,10 @@ import { QueryResultsMapping } from './services/queryResultsMapping';
 // import { TableReference } from './services/tableMetadata';
 import { ResultsRender } from './services/resultsRender';
 import { QueryResultsVisualizationType } from './services/queryResultsVisualizationType';
-import { TroubleshootSerializer } from './activitybar/troubleshootSerializer';
 import { DownloadJsonl } from './tableResultsPanel/downloadJsonl';
 import { CopyToClipboard } from './tableResultsPanel/copyToClipboard';
 // import { Job } from '@google-cloud/bigquery';
 import { ResultsGridRenderRequestV2, ResultsGridRenderRequestV2Type } from './tableResultsPanel/resultsGridRenderRequestV2';
-import { AuthenticationTreeItem, AuthenticationTreeItemType } from './activitybar/authenticationTreeItem';
 import { Dataset, Table } from '@google-cloud/bigquery';
 import { formatBigQuerySQL } from './language/bqsqlFormatter';
 import { buildJobDetails } from './services/jobHistoryService';
@@ -40,12 +39,7 @@ export const COMMAND_PREVIEW_CTE = "vscode-bigquery.preview-cte";
 export const COMMAND_PROFILE_COLUMN = "vscode-bigquery.profile-column";
 export const COMMAND_PREVIEW_TABLE_AT_CURSOR = "vscode-bigquery.preview-table-at-cursor";
 export const COMMAND_USER_LOGIN = "vscode-bigquery.user-login";
-export const COMMAND_USER_LOGIN_WITH_DRIVE = "vscode-bigquery.user-login-drive";
-export const COMMAND_USER_LOGIN_NO_LAUNCH_BROWSER = "vscode-bigquery.user-login-no-launch-browser";
-export const COMMAND_USER_ACTIVATE = "vscode-bigquery.gcp-user-activate";
-export const COMMAND_USER_REMOVE = "vscode-bigquery.gcp-user-remove";
-export const COMMAND_GCLOUD_INIT = "vscode-bigquery.gcloud-init";
-export const COMMAND_SERVICE_ACCOUNT_LOGIN = "vscode-bigquery.service-account-login";
+export const COMMAND_AUTH_TOKEN_INFO = "vscode-bigquery.auth-token-info";
 export const COMMAND_AUTHENTICATION_REFRESH = "vscode-bigquery.authentication-refresh";
 export const COMMAND_EXPLORER_REFRESH = "vscode-bigquery.explorer-refresh";
 export const COMMAND_VIEW_TABLE = "vscode-bigquery.view-table";
@@ -63,7 +57,6 @@ export const SETTING_TABLES = "vscode-bigquery.tables";
 export const SETTING_HIDDEN_PROJECTS = "vscode-bigquery.hidden-projects";
 export const COMMAND_PROJECT_HIDE = "vscode-bigquery.project-hide";
 export const COMMAND_SHOW_HIDDEN_PROJECTS = "vscode-bigquery.show-hidden-projects";
-export const AUTHENTICATION_TROUBLESHOOT = "vscode-bigquery.troubleshoot";
 export const OPEN_SETTING_PROJECTS = "vscode-bigquery.open-settings-projects";
 export const OPEN_SETTING_TABLES = "vscode-bigquery.open-settings-tables";
 export const COMMAND_FORMAT_QUERY = "vscode-bigquery.format-query";
@@ -476,126 +469,52 @@ const runQuery = async function (globalState: vscode.Memento, queryResultsWebvie
 	return 0;
 };
 
-export const commandUserLogin = function (...args: any[]) {
+export const commandUserLogin = async function (...args: any[]) {
 
 	resetBigQueryClient();
 
-	Authentication.userLogin()
-		.then(result => {
-			if (result.valid) {
-				vscode.window.showInformationMessage('Bigquery: User login - successful');
-				vscode.commands.executeCommand(COMMAND_AUTHENTICATION_REFRESH);
-			} else {
-				vscode.window.showErrorMessage('Bigquery: User login - had invalid response');
-			}
-
-			resetBigQueryClient();
-
-		});
-
-};
-
-export const commandUserLoginWithDrive = function (...args: any[]) {
-
-	resetBigQueryClient();
-
-	Authentication.userLoginWithDrive()
-		.then(result => {
-			if (result.valid) {
-				vscode.window.showInformationMessage('Bigquery: User login - successful');
-				vscode.commands.executeCommand(COMMAND_AUTHENTICATION_REFRESH);
-			} else {
-				vscode.window.showErrorMessage('Bigquery: User login - had invalid response');
-			}
-
-			resetBigQueryClient();
-
-		});
-
-};
-
-export const commandUserLoginNoLaunchBrowser = function (...args: any[]) {
-
-
-	resetBigQueryClient();
-
-	const terminal = vscode.window.createTerminal("gcloud");
-
-	terminal.show();
-
-	terminal.sendText('gcloud auth login --update-adc --add-quota-project-to-adc --quiet --verbosity warning --no-launch-browser');
-};
-
-export const commandServiceAccountLogin = async function (...args: any[]) {
-
-	resetBigQueryClient();
-
-	const showOpenDialogResult = await vscode.window.showOpenDialog({ canSelectFiles: true, canSelectMany: false, canSelectFolders: false });
-
-	if (showOpenDialogResult) {
-
-		let fileUri = showOpenDialogResult[0];
-		const serviceAccountLoginResult = await Authentication.serviceAccountLogin(fileUri);
-
-		if (serviceAccountLoginResult.valid) {
-			vscode.window.showInformationMessage('Bigquery: Service account login - successful');
-			vscode.commands.executeCommand(COMMAND_AUTHENTICATION_REFRESH);
+	try {
+		const account = await signIn();
+		if (account) {
+			vscode.window.showInformationMessage(`Signed in as ${account}`);
 		} else {
-			vscode.window.showErrorMessage('Bigquery: Service account login - had invalid response');
+			vscode.window.showWarningMessage('Sign-in was cancelled or no account is available.');
 		}
-
-		resetBigQueryClient();
+	} catch (error: any) {
+		vscode.window.showErrorMessage(`Sign-in failed: ${error?.message ?? error}`);
 	}
 
+	vscode.commands.executeCommand(COMMAND_AUTHENTICATION_REFRESH);
 
 };
 
-export const commandGcpUserActivate = async function (...args: any[]) {
+let authOutput: vscode.OutputChannel | null = null;
 
-	resetBigQueryClient();
+/** Diagnostics: audience / tenant / expiry for both token scopes. Never prints the token. */
+export const commandAuthTokenInfo = async function (...args: any[]) {
 
-	const item = args[0] as AuthenticationTreeItem;
+	if (!authOutput) { authOutput = vscode.window.createOutputChannel('BigQuery Studio: Auth'); }
+	const out = authOutput;
+	out.clear();
+	out.show(true);
 
-	Authentication.activate(item.label)
-		.then(result => {
-			vscode.commands.executeCommand(COMMAND_AUTHENTICATION_REFRESH);
-		});
-
-};
-
-export const commandGcpUserRemove = async function (...args: any[]) {
-
-	resetBigQueryClient();
-
-	const item = args[0] as AuthenticationTreeItem;
-
-	Authentication.revoke(item.label)
-		.then(result => {
-			vscode.commands.executeCommand(COMMAND_AUTHENTICATION_REFRESH);
-		});
-
-};
-
-export const commandGCloudInit = function (...args: any[]) {
-
-
-	resetBigQueryClient();
-
-	const terminal = vscode.window.createTerminal("gcloud");
-
-	terminal.show();
-
-	terminal.sendText('gcloud init');
+	for (const [name, scope] of [['SQL (TDS)', SCOPE_TDS], ['Fabric REST', SCOPE_FABRIC]] as const) {
+		out.appendLine(`== ${name} — ${scope}`);
+		try {
+			const info = await getAccessToken(scope, true);
+			if (!info) { out.appendLine('   no session'); continue; }
+			for (const [k, v] of Object.entries(describeToken(info))) { out.appendLine(`   ${k}: ${v}`); }
+		} catch (error: any) {
+			out.appendLine(`   ERROR: ${error?.message ?? error}`);
+		}
+	}
 
 };
 
 export const commandAuthenticationRefresh = function (...args: any[]) {
 
-	const t1 = Date.now();
-
 	resetBigQueryClient();
 
-	gcpAuthenticationTreeDataProvider.refresh();
 	authenticationWebviewProvider.refresh();
 
 };
@@ -1055,22 +974,6 @@ export const commandShowHiddenProjects = async function () {
 	}
 };
 
-export const commandAuthenticationTroubleshoot = async function (this: any, ...args: any[]) {
-
-	const t1 = Date.now();
-
-	const panel = vscode.window.createWebviewPanel(
-		TROUBLESHOOT_VIEW_TYPE,
-		'Troubleshoot',
-		vscode.ViewColumn.One,
-		{ retainContextWhenHidden: true }
-	);
-
-	panel.webview.html = TroubleshootSerializer.getTroubleshootHtml(panel);
-
-
-};
-
 export const commandOpenSettingProjects = async function (this: any, ...args: any[]) {
 
 	const t1 = Date.now();
@@ -1450,35 +1353,15 @@ export const commandSetLineageExportTheme = async function (...args: any[]) {
 	vscode.window.showInformationMessage(`BigQuery: Lineage export theme switched to ${newTheme} (${themeDescription})`);
 };
 
-// Revoke Session (via Command Palette)
+// Sign out (via Command Palette or the Authentication view)
 export const commandRevokeSession = async function (...args: any[]) {
 	try {
-		const accounts = await Authentication.list(false);
-
-		if (accounts.length === 0) {
-			vscode.window.showInformationMessage('No authenticated accounts found');
-			return;
-		}
-
-		const items = accounts.map(account => ({
-			label: account.account,
-			description: account.status === 'ACTIVE' ? '(Active)' : ''
-		}));
-
-		const selected = await vscode.window.showQuickPick(items, {
-			placeHolder: 'Select account to revoke',
-			title: 'Revoke Authentication'
-		});
-
-		if (selected) {
-			resetBigQueryClient();
-
-			await Authentication.revoke(selected.label);
-			vscode.window.showInformationMessage(`Revoked authentication for ${selected.label}`);
-			vscode.commands.executeCommand(COMMAND_AUTHENTICATION_REFRESH);
-		}
+		resetBigQueryClient();
+		await signOut();
+		vscode.window.showInformationMessage('Signed out. To remove the Microsoft account entirely, use the VS Code Accounts menu.');
+		vscode.commands.executeCommand(COMMAND_AUTHENTICATION_REFRESH);
 	} catch (error: any) {
-		vscode.window.showErrorMessage(`Failed to revoke session: ${error.message || error}`);
+		vscode.window.showErrorMessage(`Failed to sign out: ${error.message || error}`);
 	}
 };
 
