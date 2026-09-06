@@ -26,7 +26,6 @@ A powerful Visual Studio Code extension for Google BigQuery. Browse datasets and
 - **Table Schema Hover** - Hover over table names to see schema details (JOINs, CTEs, backtick-quoted)
 - **Data Lineage** - Visualize data flow with CTE support; PNG / PDF export (individual and bulk); dark/light export theme
 - **Export Options** - Download query and preview results as CSV or JSONL, copy to clipboard as Markdown, copy selected rows as TSV/MD
-- **Pub/Sub Integration** - Publish query results directly to Google Cloud Pub/Sub
 - **Automatic Query Location** - Region auto-detected from the first FROM via `datasets.get`; override with `vscode-bigquery.defaultLocation`
 - **Persistent Panels** - Results and preview panels restore across VS Code restarts
 
@@ -245,7 +244,7 @@ Query results, table previews, and multi-statement scripts render in a Preact-ba
 | **Column drag-resize** | Grab the thin handle at the right edge of any column header and drag. Per-column widths remembered for the current panel session. |
 | **Row number gutter** | Sticky-left numbered gutter. Hover highlight; accent-colored when the row is selected. |
 | **Type-aware syntax colors** | Cell text tinted per BigQuery type via CSS custom properties (see [Color Customization](#color-customization)). Defaults inherit from VS Code theme vars. |
-| **Exports** | CSV, JSONL, Pub/Sub, and Copy-as-Markdown buttons in the toolbar. All four route through the existing extension commands — no regressions in the export flows. Pub/Sub requires a job reference (query results only; table previews use CSV / JSONL / Copy). |
+| **Exports** | CSV, JSONL, and Copy-as-Markdown buttons in the toolbar. All three route through the existing extension commands. |
 | **Pagination** | First / prev / next / last buttons, page-number input, and rows-per-page selector (25 / 50 / 100 / 250 / 1000). Uses BigQuery `getQueryResults` (query jobs) or `tabledata.list` (table previews) REST API with `startIndex` + `maxResults`. |
 | **Table preview** | Right-click → **Preview** loads schema via `tables.get` and rows via `tabledata.list` into the same grid. Exports use `tableReference` instead of `jobReference`. |
 | **Multi-statement scripts** | Queries with `;` separators render as a vertical stack of child-job tables, each labelled `Statement N · <statementType>`. Powered by `jobs.list?parentJobId=…`; each child job opens as an independent BqTable with its own pagination. |
@@ -304,34 +303,6 @@ Copy results in CSV format with a configurable size limit (default 1MB). Configu
 Download results in [JSONL](https://jsonlines.org/) format from the result grid toolbar.
 
 <img src="https://raw.githubusercontent.com/sseveur/vscode-bigquery/main/documentation/download_jsonl.png" alt="download jsonl" width="200"/>
-
-### Send to Pub/Sub
-
-Publish query results to Google Cloud Pub/Sub (one message per row).
-
-Requirements:
-- A column named `data` of type `STRING` or `JSON`
-- Optional: A column named `attributes` of type `RECORD`
-
-Example query:
-```sql
-SELECT
-    (
-    SELECT AS STRUCT
-        "my test test" AS test,
-        "amazing data type" AS data_type
-    ) AS attributes,
-
-    TO_JSON(t) AS data
-
-FROM `dataset.table` t
-```
-
-<img src="https://raw.githubusercontent.com/sseveur/vscode-bigquery/main/documentation/send_to_pubsub.png" alt="send to Pub/Sub" width="200"/>
-
-Enter the topic name in the format: `projects/<project_id>/topics/<topic_name>`
-
-<img src="https://raw.githubusercontent.com/sseveur/vscode-bigquery/main/documentation/send_to_pubsub_topic_name.png" alt="Pub/Sub topic name" width="200"/>
 
 ## Query History
 
@@ -465,7 +436,6 @@ All commands are available via the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+
 | BigQuery: Download CSV | Export the active result set as CSV |
 | BigQuery: Download JSONL | Export the active result set as JSONL |
 | BigQuery: Copy to Clipboard | Copy the active result set as Markdown |
-| BigQuery: Send to Pub/Sub | Publish the active result set to a Pub/Sub topic |
 | **Other** | |
 | BigQuery: Troubleshoot | Open troubleshooting guide |
 | BigQuery: Open Settings - Projects | Open project settings |
@@ -593,7 +563,7 @@ Improvements over the original project:
 - **Customizable cell colors** — New `vscode-bigquery.gridColors` setting lets you retune per-BQ-type cell text colors (number, boolean, timestamp, struct, bytes, string, null) without writing CSS. See [Color Customization](#color-customization).
 
 ### New Features (cumulative since fork)
-- **Notebook mode for SQL files** - Open `.sql`/`.bqsql` as a BigQuery notebook. Per-cell run / cancel / exports (CSV, JSONL, Pub/Sub, Copy-as-Markdown). Tabbed Results/Schema, pagination with page-number input, configurable page size (25/50/100/250/1000), cell output persisted across VS Code restarts.
+- **Notebook mode for SQL files** - Open `.sql`/`.bqsql` as a BigQuery notebook. Per-cell run / cancel / exports (CSV, JSONL, Copy-as-Markdown). Tabbed Results/Schema, pagination with page-number input, configurable page size (25/50/100/250/1000), cell output persisted across VS Code restarts.
 - **Smart Column Autocomplete** - Type `alias.` or `cte_name.` to get column suggestions from tables and CTEs
 - **Data Lineage Visualization** - dbt-style lineage graphs with CTE support, multi-query support, click-to-navigate, hover tooltips, Query Result nodes, right-click lineage for selection, PNG / PDF export (individual and bulk, cross-platform)
 - **Query History** - Track all executed queries with re-run, copy, and delete; bytes / duration / status shown inline

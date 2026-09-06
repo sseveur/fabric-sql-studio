@@ -4,7 +4,6 @@ import { BigqueryAuthenticationWebviewViewProvider } from './activitybar/authent
 import { BigQueryTreeDataProvider } from './activitybar/treeDataProvider';
 import * as commands from './extensionCommands';
 import { WebviewViewProvider } from './tableResultsPanel/webviewViewProvider';
-// import TelemetryReporter from '@vscode/extension-telemetry';
 import { BqsqlCompletionItemProvider } from './language/bqsqlCompletionItemProvider';
 import { BqsqlDocumentSemanticTokensProvider } from './language/bqsqlDocumentSemanticTokensProvider';
 import { BqsqlInlayHintsProvider } from './language/bqsqlInlayHintsProvider';
@@ -49,23 +48,11 @@ export function getExtensionUri(): Uri {
 	return extensionUri;
 }
 
-// let reporter: TelemetryReporter | null;
-// export function getTelemetryReporter(): TelemetryReporter | null {
-// 	return reporter;
-// }
-
 export function activate(context: ExtensionContext) {
 
 	extensionUri = context.extensionUri;
 
 	let queryResultsWebviewMapping: Map<string, ResultsRender> = new Map<string, ResultsRender>();
-
-	// try {
-	// 	//context.extension.id, context.extension.packageJSON.version, 
-	// 	reporter = new TelemetryReporter('10f4da7d-e729-4526-8d9b-92529b10cb32');
-	// 	context.subscriptions.push(reporter);
-
-	// } catch (e) { console.error(e); }
 
 	//statusBarInfo
 	statusBarInfo = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 0);
@@ -233,14 +220,6 @@ export function activate(context: ExtensionContext) {
 		vscode.commands.registerCommand(
 			commands.COMMAND_DOWNLOAD_JSONL,
 			commands.commandDownloadJsonl,
-			{ "globalState": context.globalState }
-		),
-	);
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand(
-			commands.COMMAND_SEND_PUBSUB,
-			commands.commandSendPubsub,
 			{ "globalState": context.globalState }
 		),
 	);
@@ -658,7 +637,6 @@ export function activate(context: ExtensionContext) {
 	vscode.workspace.onDidChangeConfiguration(event => {
 		if (event.affectsConfiguration('workbench.colorTheme')) {
 			vscode.commands.executeCommand(commands.COMMAND_EXPLORER_REFRESH);
-			// reporter?.sendTelemetryEvent('onDidChangeActiveColorTheme', { activeColorThemeKind: vscode.ColorThemeKind[vscode.window.activeColorTheme.kind] });
 		}
 		// Refresh the explorer when its backing settings change from any source
 		// (pin/unpin on another machine via Settings Sync, manual settings.json edits) —
@@ -698,10 +676,6 @@ export function activate(context: ExtensionContext) {
 		}
 
 	});
-
-	// vscode.env.onDidChangeTelemetryEnabled
-
-	// vscode.env.isTelemetryEnabled
 
 }
 

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { getExtensionUri } from '../extension';
-import { COMMAND_DOWNLOAD_CSV, COMMAND_DOWNLOAD_JSONL, COMMAND_SEND_PUBSUB, COMMAND_COPY_CLIPBOARD } from '../extensionCommands';
+import { COMMAND_DOWNLOAD_CSV, COMMAND_DOWNLOAD_JSONL, COMMAND_COPY_CLIPBOARD } from '../extensionCommands';
 import { ResultsGridRenderRequestV2 } from './resultsGridRenderRequestV2';
 
 const GRID_COLOR_KEY_TO_VAR: Record<string, string> = {
@@ -53,7 +53,6 @@ export class ResultsGridRender {
             switch (command) {
                 case "download_csv": { vscode.commands.executeCommand(COMMAND_DOWNLOAD_CSV, data); break; }
                 case "download_jsonl": { vscode.commands.executeCommand(COMMAND_DOWNLOAD_JSONL, data); break; }
-                case "send_pubsub": { vscode.commands.executeCommand(COMMAND_SEND_PUBSUB, data); break; }
                 case "copy_to_clipboard": { vscode.commands.executeCommand(COMMAND_COPY_CLIPBOARD, data); break; }
             }
         }

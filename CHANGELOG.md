@@ -5,6 +5,13 @@ All notable changes to the BigQuery Studio extension will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - Fabric / SQL Server port
+
+### Removed
+
+- **Pub/Sub export** - The "Send to Pub/Sub" command, grid button and `@google-cloud/pubsub` dependency are gone; there is no equivalent on the Fabric / SQL Server targets this branch is moving to.
+- **Dead code** - Deleted the unbuildable `resultsGrid.tsxxx`, the duplicate `resultsGridRenderRequest.d.ts`, the scratch `commands.txt`, and all commented-out telemetry wiring.
+
 ## [2.12.1] - 2026-08-05
 
 ### Fixed

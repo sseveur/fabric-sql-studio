@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { BigQueryClient } from './services/bigqueryClient';
 import { bigQueryTreeDataProvider, QUERY_RESULTS_VIEW_TYPE, TABLE_RESULTS_VIEW_TYPE, TROUBLESHOOT_VIEW_TYPE, gcpAuthenticationTreeDataProvider, authenticationWebviewProvider, bigqueryTableSchemaService } from './extension';
-// import { ResultsGridRenderRequest } from './tableResultsPanel/resultsGridRenderRequest';
 import { Authentication } from './services/authentication';
 import { BigqueryTreeItem, BigqueryTreeItemType } from './activitybar/bigqueryTreeItem';
 import { SchemaRender } from './tableResultsPanel/schemaRender';
@@ -15,10 +14,8 @@ import { QueryResultsMapping } from './services/queryResultsMapping';
 // import { TableReference } from './services/tableMetadata';
 import { ResultsRender } from './services/resultsRender';
 import { QueryResultsVisualizationType } from './services/queryResultsVisualizationType';
-// import { TelemetryEventProperties } from '@vscode/extension-telemetry';
 import { TroubleshootSerializer } from './activitybar/troubleshootSerializer';
 import { DownloadJsonl } from './tableResultsPanel/downloadJsonl';
-import { SendToPubsub } from './tableResultsPanel/sendToPubsub';
 import { CopyToClipboard } from './tableResultsPanel/copyToClipboard';
 // import { Job } from '@google-cloud/bigquery';
 import { ResultsGridRenderRequestV2, ResultsGridRenderRequestV2Type } from './tableResultsPanel/resultsGridRenderRequestV2';
@@ -59,7 +56,6 @@ export const COMMAND_SET_DEFAULT_PROJECT = "vscode-bigquery.set-default-project"
 export const COMMAND_PROJECT_PIN = "vscode-bigquery.project-pin";
 export const COMMAND_DOWNLOAD_CSV = "vscode-bigquery.download-csv";
 export const COMMAND_DOWNLOAD_JSONL = "vscode-bigquery.download-jsonl";
-export const COMMAND_SEND_PUBSUB = "vscode-bigquery.send-pubsub";
 export const COMMAND_COPY_CLIPBOARD = "vscode-bigquery.copy-to-clipboard";
 export const SETTING_PINNED_PROJECTS = "vscode-bigquery.pinned-projects";
 export const SETTING_PROJECTS = "vscode-bigquery.projects";
@@ -294,7 +290,6 @@ const commandQuery = async function (local: any, queryType: RunQueryType) {
 
 	const numberOfJobs = await runQuery(globalState, queryResultsWebviewMapping, uuid, activeTab.label, queryText);
 
-	// getTelemetryReporter()?.sendTelemetryEvent((queryType === RunQueryType.query) ? 'commandRunQuery' : 'commandRunSelectedQuery', {}, { numberOfJobs: numberOfJobs, elapsedMs: Date.now() - t1 });
 
 };
 
@@ -492,14 +487,12 @@ export const commandUserLogin = function (...args: any[]) {
 				vscode.commands.executeCommand(COMMAND_AUTHENTICATION_REFRESH);
 			} else {
 				vscode.window.showErrorMessage('Bigquery: User login - had invalid response');
-				// getTelemetryReporter()?.sendTelemetryErrorEvent('commandUserLogin', { error: 'Bigquery: User login - had invalid response' });
 			}
 
 			resetBigQueryClient();
 
 		});
 
-	// getTelemetryReporter()?.sendTelemetryEvent('commandUserLogin', {});
 };
 
 export const commandUserLoginWithDrive = function (...args: any[]) {
@@ -513,19 +506,16 @@ export const commandUserLoginWithDrive = function (...args: any[]) {
 				vscode.commands.executeCommand(COMMAND_AUTHENTICATION_REFRESH);
 			} else {
 				vscode.window.showErrorMessage('Bigquery: User login - had invalid response');
-				// getTelemetryReporter()?.sendTelemetryErrorEvent('commandUserLoginWithDrive', { error: 'Bigquery: User login - had invalid response' });
 			}
 
 			resetBigQueryClient();
 
 		});
 
-	// getTelemetryReporter()?.sendTelemetryEvent('commandUserLoginWithDrive', {});
 };
 
 export const commandUserLoginNoLaunchBrowser = function (...args: any[]) {
 
-	// getTelemetryReporter()?.sendTelemetryEvent('commandUserLoginNoLaunchBrowser', {});
 
 	resetBigQueryClient();
 
@@ -552,13 +542,11 @@ export const commandServiceAccountLogin = async function (...args: any[]) {
 			vscode.commands.executeCommand(COMMAND_AUTHENTICATION_REFRESH);
 		} else {
 			vscode.window.showErrorMessage('Bigquery: Service account login - had invalid response');
-			// getTelemetryReporter()?.sendTelemetryErrorEvent('commandUserLogin', { error: 'Bigquery: Service account login - had invalid response' });
 		}
 
 		resetBigQueryClient();
 	}
 
-	// getTelemetryReporter()?.sendTelemetryEvent('commandServiceAccountLogin', {});
 
 };
 
@@ -573,7 +561,6 @@ export const commandGcpUserActivate = async function (...args: any[]) {
 			vscode.commands.executeCommand(COMMAND_AUTHENTICATION_REFRESH);
 		});
 
-	// getTelemetryReporter()?.sendTelemetryEvent('commandGcpUserActivate', {});
 };
 
 export const commandGcpUserRemove = async function (...args: any[]) {
@@ -587,12 +574,10 @@ export const commandGcpUserRemove = async function (...args: any[]) {
 			vscode.commands.executeCommand(COMMAND_AUTHENTICATION_REFRESH);
 		});
 
-	// getTelemetryReporter()?.sendTelemetryEvent('commandGcpUserRemove', {});
 };
 
 export const commandGCloudInit = function (...args: any[]) {
 
-	// getTelemetryReporter()?.sendTelemetryEvent('commandGCloudInit', {});
 
 	resetBigQueryClient();
 
@@ -613,7 +598,6 @@ export const commandAuthenticationRefresh = function (...args: any[]) {
 	gcpAuthenticationTreeDataProvider.refresh();
 	authenticationWebviewProvider.refresh();
 
-	// getTelemetryReporter()?.sendTelemetryEvent('commandAuthenticationRefresh', {}, { elapsedMs: Date.now() - t1 });
 };
 
 export const commandExplorerRefresh = function (...args: any[]) {
@@ -622,7 +606,6 @@ export const commandExplorerRefresh = function (...args: any[]) {
 
 	bigQueryTreeDataProvider.refresh();
 
-	// getTelemetryReporter()?.sendTelemetryEvent('commandExplorerRefresh', {}, { elapsedMs: Date.now() - t1 });
 };
 
 export const commandViewTable = async function (...args: any[]) {
@@ -725,7 +708,6 @@ export const commandViewTable = async function (...args: any[]) {
 		}
 	}
 
-	// getTelemetryReporter()?.sendTelemetryEvent('commandViewTable', {}, { elapsedMs: Date.now() - t1 });
 };
 
 async function openQueryEditor(item: BigqueryTreeItem) {
@@ -782,7 +764,6 @@ export const commandCreateTableDefaultQuery = async function (...args: any[]) {
 
 	await vscode.commands.executeCommand<vscode.TextDocumentShowOptions>("vscode.open", doc.uri);
 
-	// getTelemetryReporter()?.sendTelemetryEvent('commandCreateTableDefaultQuery', {}, { elapsedMs: Date.now() - t1 });
 
 };
 
@@ -816,7 +797,6 @@ export const commandOpenDdl = async function (...args: any[]) {
 		vscode.window.showErrorMessage(JSON.stringify(error));
 	}
 
-	// getTelemetryReporter()?.sendTelemetryEvent('commandOpenDdl', {}, { elapsedMs: Date.now() - t1 });
 
 };
 
@@ -833,7 +813,6 @@ export const commandSetDefaultProject = function (...args: any[]) {
 			resetBigQueryClient();
 		});
 
-	// getTelemetryReporter()?.sendTelemetryEvent('setDefaultProjectId', {});
 };
 
 export const commandDownloadCsv = async function (this: any, ...args: any[]) {
@@ -896,11 +875,7 @@ export const commandDownloadCsv = async function (this: any, ...args: any[]) {
 	// 	}
 	// }
 
-	// const telemetryProperties: TelemetryEventProperties = {
-	// 	"button": (args.length > 0 && typeof (args[0]) === "string" ? args[0] : 'webViewPanel')
-	// };
 
-	// getTelemetryReporter()?.sendTelemetryEvent('commandDownloadCsv', telemetryProperties);
 };
 
 export const commandDownloadJsonl = async function (this: any, ...args: any[]) {
@@ -961,65 +936,6 @@ export const commandDownloadJsonl = async function (this: any, ...args: any[]) {
 			// 	}
 			// }
 
-			// const telemetryProperties: TelemetryEventProperties = {
-			// 	"button": (args.length > 0 && typeof (args[0]) === "string" ? args[0] : 'webViewPanel')
-			// };
-			// getTelemetryReporter()?.sendTelemetryEvent('commandDownloadJsonl', telemetryProperties);
-		}
-	}
-};
-
-export const commandSendPubsub = async function (this: any, ...args: any[]) {
-
-	if (args.length > 0) {
-
-		let data = args[0];
-		if (data.command === "send_pubsub") {
-			if (data.jobReference) {
-				const bqClient = await getBigQueryClient();
-
-				let jobReference = data.jobReference;
-				await SendToPubsub.sendJobResult(bqClient, jobReference);
-			}
-
-			// const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
-
-			// if (activeTab === undefined || activeTab.input === undefined) {
-			// 	return;
-			// }
-
-			// const viewType = ((activeTab.input as any).viewType as string);
-			// if (viewType?.endsWith('-bigquery-query-results')) {
-
-			// 	const uuid = activeTab.label.substring(activeTab.label.length - 8);
-
-			// 	const globalState: vscode.Memento = this.globalState;
-			// 	let queryResultsMapping: QueryResultsMapping[] | undefined = globalState.get('queryResultsMapping');
-			// 	if (queryResultsMapping) {
-
-			// 		const item = queryResultsMapping.find(c => c.uuid === uuid);
-			// 		if (item && item.jobReferences && item.jobIndex !== undefined) {
-			// 			const bqClient = await getBigQueryClient();
-			// 			await SendToPubsub.sendJobResult(bqClient, item.jobReferences[item.jobIndex]);
-			// 		}
-			// 	}
-			// }
-			// //  else {
-			// // 	if (viewType?.endsWith('-bigquery-table-results')) {
-
-			// // 		const tableId = activeTab.label.split('.');
-			// // 		const table = getBigQueryClient().getTable(tableId[0], tableId[1], tableId[2]);
-
-			// // 		await DownloadJsonl.downloadTable(getBigQueryClient(), table);
-
-			// // 	}
-			// // }
-
-			// const telemetryProperties: TelemetryEventProperties = {
-			// 	"button": (args.length > 0 && typeof (args[0]) === "string" ? args[0] : 'webViewPanel')
-			// };
-
-			// getTelemetryReporter()?.sendTelemetryEvent('commandSendPubsub', telemetryProperties);
 		}
 	}
 };
@@ -1152,7 +1068,6 @@ export const commandAuthenticationTroubleshoot = async function (this: any, ...a
 
 	panel.webview.html = TroubleshootSerializer.getTroubleshootHtml(panel);
 
-	// getTelemetryReporter()?.sendTelemetryEvent('commandAuthenticationTroubleshoot', {}, { elapsedMs: Date.now() - t1 });
 
 };
 
@@ -1162,7 +1077,6 @@ export const commandOpenSettingProjects = async function (this: any, ...args: an
 
 	vscode.commands.executeCommand('workbench.action.openWorkspaceSettings', 'vscode-bigquery.projects');
 
-	// getTelemetryReporter()?.sendTelemetryEvent('commandOpenSettingProjects', {}, { elapsedMs: Date.now() - t1 });
 
 };
 
@@ -1172,7 +1086,6 @@ export const commandOpenSettingTables = async function (this: any, ...args: any[
 
 	vscode.commands.executeCommand('workbench.action.openWorkspaceSettings', 'vscode-bigquery.tables');
 
-	// getTelemetryReporter()?.sendTelemetryEvent('commandOpenSettingTables', {}, { elapsedMs: Date.now() - t1 });
 
 };
 
@@ -1185,7 +1098,6 @@ export const getBigQueryClient = async function (): Promise<BigQueryClient> {
 		const t1 = Date.now();
 		const projectId = await Authentication.getDefaultProjectId();
 		bigQueryClient = new BigQueryClient(projectId);
-		// getTelemetryReporter()?.sendTelemetryEvent('CreateBigQueryClient', {}, { elapsedMs: Date.now() - t1 });
 	}
 
 	return bigQueryClient;

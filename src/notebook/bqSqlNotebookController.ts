@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { BigQueryClient, selectFinalDmlChildJob, selectFinalResultChildJob } from '../services/bigqueryClient';
 import { DownloadCsv } from '../tableResultsPanel/downloadCsv';
 import { DownloadJsonl } from '../tableResultsPanel/downloadJsonl';
-import { SendToPubsub } from '../tableResultsPanel/sendToPubsub';
 import { CopyToClipboard } from '../tableResultsPanel/copyToClipboard';
 import { Authentication } from '../services/authentication';
 import { QueryHistoryService } from '../services/queryHistoryService';
@@ -70,13 +69,12 @@ export class BqSqlNotebookController implements vscode.Disposable {
             }
             if (m.type === 'bq-export') {
                 // In-grid export buttons: run the same export helpers as the cell status bar —
-                // dialogs/fs/Pub/Sub/clipboard live extension-side and show their own notifications.
+                // dialogs/fs/clipboard live extension-side and show their own notifications.
                 try {
                     const client = this.clientFor(m.job.projectId);
                     switch (m.command) {
                         case 'download_csv': await DownloadCsv.download(client, m.job); break;
                         case 'download_jsonl': await DownloadJsonl.download(client, m.job); break;
-                        case 'send_pubsub': await SendToPubsub.sendJobResult(client, m.job); break;
                         case 'copy_to_clipboard': await CopyToClipboard.copy(client, m.job); break;
                     }
                 } catch (err: any) {

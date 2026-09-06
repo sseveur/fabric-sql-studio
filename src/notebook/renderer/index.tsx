@@ -168,7 +168,7 @@ export function activate(context: RendererContext) {
         })
         : null;
 
-    // Fire-and-forget: the extension host runs the export (save dialog, Pub/Sub, clipboard)
+    // Fire-and-forget: the extension host runs the export (save dialog, clipboard)
     // and surfaces its own progress/error notifications — nothing to await here.
     const requestExport: ExportRequester | null = canMessage
         ? (command, job) => context.postMessage!({ type: 'bq-export', command, job })

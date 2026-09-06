@@ -15,7 +15,7 @@ interface Props {
     title?: string;
     dmlStats?: DmlStats;
     statementType?: string;
-    /** Handler for the export buttons (CSV/JSONL/Pub/Sub/Copy-all). Defaults to posting through
+    /** Handler for the export buttons (CSV/JSONL/Copy-all). Defaults to posting through
      *  the webview API (results panel). Notebook hosts pass their own handler that routes over
      *  renderer messaging instead — acquireVsCodeApi doesn't exist there. Pass null to hide the
      *  buttons (no export channel available). Clipboard selection copy is unaffected. */
@@ -435,7 +435,6 @@ export function BqTable({ fetchRows, exportRef, schema, totalRows, initialRows, 
                             {onExport && <>
                                 <button class="bq-pg-btn" onClick={() => onExport('download_csv', exportRef)} title="Download all as CSV">CSV</button>
                                 <button class="bq-pg-btn" onClick={() => onExport('download_jsonl', exportRef)} title="Download all as JSONL">JSONL</button>
-                                <button class="bq-pg-btn" onClick={() => onExport('send_pubsub', exportRef)} title="Send to Pub/Sub">Pub/Sub</button>
                                 <button class="bq-pg-btn" onClick={() => onExport('copy_to_clipboard', exportRef)} title="Copy all as Markdown">Copy</button>
                             </>}
                         </div>
