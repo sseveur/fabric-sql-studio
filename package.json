@@ -71,18 +71,31 @@
 						"title": "Entra Tenant ID",
 						"description": "Tenant (directory) ID to sign in to. Leave empty for your home tenant."
 					},
-					"vscode-bigquery.connection": {
-						"type": "object",
+					"vscode-bigquery.connections": {
+						"type": "array",
 						"scope": "machine-overridable",
 						"order": 5,
-						"title": "Connection",
-						"description": "SQL endpoint to run queries against (Fabric Warehouse / Lakehouse SQL endpoint, Azure SQL, SQL Server). Entra authentication only.",
-						"properties": {
-							"server": { "type": "string", "description": "Host name, e.g. xxxx.datawarehouse.fabric.microsoft.com or myserver.database.windows.net" },
-							"database": { "type": "string", "description": "Database / warehouse / lakehouse name. Required on Fabric." },
-							"port": { "type": "number", "default": 1433 }
+						"title": "Connections",
+						"description": "SQL endpoints to browse and query: Fabric Warehouse / Lakehouse SQL endpoints, Azure SQL, SQL Server. Entra authentication only.",
+						"items": {
+							"type": "object",
+							"required": ["server"],
+							"properties": {
+								"id": { "type": "string", "description": "Display name. Defaults to server/database." },
+								"server": { "type": "string", "description": "Host, e.g. xxxx.datawarehouse.fabric.microsoft.com or myserver.database.windows.net" },
+								"database": { "type": "string", "description": "Database / warehouse / lakehouse to connect to. Required on Fabric." },
+								"port": { "type": "number", "default": 1433 }
+							}
 						},
-						"default": {}
+						"default": []
+					},
+					"vscode-bigquery.activeConnection": {
+						"type": "string",
+						"default": "",
+						"scope": "machine-overridable",
+						"order": 6,
+						"title": "Active Connection",
+						"description": "The connection id Ctrl+Enter queries run against. Empty = first connection."
 					},
 					"vscode-bigquery.maxRows": {
 						"type": "number",
@@ -124,45 +137,13 @@
 			{
 				"title": "BigQuery Studio › Explorer",
 				"properties": {
-					"vscode-bigquery.pinned-projects": {
+					"vscode-bigquery.pinned-objects": {
 						"type": "array",
+						"items": { "type": "string" },
 						"default": [],
 						"scope": "machine-overridable",
-						"order": 1,
-						"title": "Pinned projects",
-						"description": "Pinned GCP projects id's in the explorer tree in the Bigquery extension"
-					},
-					"vscode-bigquery.pinned-tables": {
-						"type": "array",
-						"default": [],
-						"scope": "machine-overridable",
-						"order": 2,
-						"title": "Pinned Tables",
-						"description": "Tables pinned in explorer for quick access. Format: project.dataset.table"
-					},
-					"vscode-bigquery.projects": {
-						"type": "array",
-						"default": [],
-						"scope": "machine-overridable",
-						"order": 3,
-						"title": "Projects",
-						"description": "GCP projects id's that need to be listed, but there's no explicit permission to the project, only datasets"
-					},
-					"vscode-bigquery.tables": {
-						"type": "array",
-						"default": [],
-						"scope": "machine-overridable",
-						"order": 4,
-						"title": "Table full name",
-						"description": "Tables that need to be listed, but there's no explicit permission to the project nor dataset, only the table"
-					},
-					"vscode-bigquery.hidden-projects": {
-						"type": "array",
-						"default": [],
-						"scope": "machine-overridable",
-						"order": 5,
-						"title": "Hidden projects",
-						"description": "GCP projects id's that are hidden from the explorer tree in the Bigquery extension"
+						"title": "Pinned Objects",
+						"description": "Tables / views pinned in the explorer. Format: <connection id>/database.schema.name"
 					}
 				}
 			},
@@ -521,7 +502,7 @@
 			},
 			{
 				"command": "vscode-bigquery.view-table",
-				"title": "BigQuery: Preview",
+				"title": "BigQuery: Preview (Top 100)",
 				"icon": "$(link-external)"
 			},
 			{
@@ -536,27 +517,13 @@
 			},
 			{
 				"command": "vscode-bigquery.open-ddl",
-				"title": "BigQuery: Open DDL",
+				"title": "BigQuery: Open Definition",
 				"icon": "$(link-external)"
 			},
 			{
 				"command": "vscode-bigquery.set-default-project",
-				"title": "BigQuery: Set Default Project",
+				"title": "BigQuery: Use This Connection",
 				"icon": "$(issue-closed)"
-			},
-			{
-				"command": "vscode-bigquery.project-pin",
-				"title": "BigQuery: Pin/Unpin Project",
-				"icon": "$(pin)"
-			},
-			{
-				"command": "vscode-bigquery.project-hide",
-				"title": "BigQuery: Hide Project",
-				"icon": "$(eye-closed)"
-			},
-			{
-				"command": "vscode-bigquery.show-hidden-projects",
-				"title": "BigQuery: Show Hidden Projects"
 			},
 			{
 				"command": "vscode-bigquery.download-csv",
@@ -574,8 +541,8 @@
 				"icon": "$(clippy)"
 			},
 			{
-				"command": "vscode-bigquery.open-settings-projects",
-				"title": "BigQuery: Open Settings - Projects"
+				"command": "vscode-bigquery.open-settings-connections",
+				"title": "BigQuery: Open Settings - Connections"
 			},
 			{
 				"command": "vscode-bigquery.format-query",
@@ -827,47 +794,37 @@
 				},
 				{
 					"command": "vscode-bigquery.view-table",
-					"when": "viewItem == 'bq-table' || viewItem == 'bq-pinned-table' || viewItem == 'bq-table-already-pinned'"
+					"when": "viewItem == 'sql-table' || viewItem == 'sql-pinned-table' || viewItem == 'sql-table-already-pinned'"
 				},
 				{
 					"command": "vscode-bigquery.view-table-schema",
-					"when": "viewItem == 'bq-table' || viewItem == 'bq-pinned-table' || viewItem == 'bq-table-already-pinned'"
+					"when": "viewItem == 'sql-table' || viewItem == 'sql-pinned-table' || viewItem == 'sql-table-already-pinned'"
 				},
 				{
 					"command": "vscode-bigquery.create-table-default-query",
-					"when": "viewItem == 'bq-table' || viewItem == 'bq-pinned-table' || viewItem == 'bq-table-already-pinned'"
+					"when": "viewItem == 'sql-table' || viewItem == 'sql-pinned-table' || viewItem == 'sql-table-already-pinned'"
 				},
 				{
 					"command": "vscode-bigquery.open-ddl",
-					"when": "viewItem == 'bq-table' || viewItem == 'bq-pinned-table' || viewItem == 'bq-table-already-pinned' || viewItem == 'bq-routine'"
+					"when": "viewItem == 'sql-table' || viewItem == 'sql-pinned-table' || viewItem == 'sql-table-already-pinned' || viewItem == 'sql-routine'"
 				},
 				{
 					"command": "vscode-bigquery.pin-table",
-					"when": "viewItem == 'bq-table'",
+					"when": "viewItem == 'sql-table'",
 					"group": "inline"
 				},
 				{
 					"command": "vscode-bigquery.unpin-table",
-					"when": "viewItem == 'bq-pinned-table' || viewItem == 'bq-table-already-pinned'",
+					"when": "viewItem == 'sql-pinned-table' || viewItem == 'sql-table-already-pinned'",
 					"group": "inline"
 				},
 				{
 					"command": "vscode-bigquery.copy-table-path",
-					"when": "viewItem == 'bq-table' || viewItem == 'bq-pinned-table' || viewItem == 'bq-table-already-pinned'"
+					"when": "viewItem == 'sql-table' || viewItem == 'sql-pinned-table' || viewItem == 'sql-table-already-pinned'"
 				},
 				{
 					"command": "vscode-bigquery.set-default-project",
-					"when": "viewItem == 'bq-gcp-project'",
-					"group": "inline"
-				},
-				{
-					"command": "vscode-bigquery.project-pin",
-					"when": "viewItem == 'bq-gcp-project'",
-					"group": "inline"
-				},
-				{
-					"command": "vscode-bigquery.project-hide",
-					"when": "viewItem == 'bq-gcp-project'",
+					"when": "viewItem == 'sql-connection'",
 					"group": "inline"
 				},
 				{
@@ -945,7 +902,7 @@
 		"viewsWelcome": [
 			{
 				"view": "bigquery-tree-data-provider",
-				"contents": "No projects found or still loading.\n\nSign in first from the Authentication view above.\nIf the permissions to GCP were given to dataset or table level (not project), it's possible to specify the project (of the target dataset) and/or table in the settings.\n[Add Project directly in Settings](command:vscode-bigquery.open-settings-projects)\n[Add Table directly in Settings](command:vscode-bigquery.open-settings-tables)"
+				"contents": "No connections configured.\n\n[Add a connection](command:vscode-bigquery.open-settings-connections) (Fabric Warehouse / Lakehouse SQL endpoint, Azure SQL or SQL Server), then sign in from the Authentication view above."
 			}
 		]
 	},

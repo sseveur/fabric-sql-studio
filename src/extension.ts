@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { Uri, StatusBarItem, ExtensionContext } from 'vscode';
 import { BigqueryAuthenticationWebviewViewProvider } from './activitybar/authenticationWebviewViewProvider';
-import { BigQueryTreeDataProvider } from './activitybar/treeDataProvider';
+import { SqlTreeDataProvider } from './activitybar/sqlTreeDataProvider';
+import { SETTING_ACTIVE_CONNECTION, SETTING_CONNECTIONS, SETTING_PINNED_OBJECTS } from './services/connections';
 import * as commands from './extensionCommands';
 import { Authentication } from './services/authentication';
 import { WebviewViewProvider } from './tableResultsPanel/webviewViewProvider';
@@ -29,7 +30,7 @@ import { registerNotebookPersistence } from './notebook/bqSqlNotebookPersistence
 
 export const bigqueryWebviewViewProvider = new WebviewViewProvider();
 export const authenticationWebviewProvider = new BigqueryAuthenticationWebviewViewProvider();
-export const bigQueryTreeDataProvider = new BigQueryTreeDataProvider();
+export const sqlTreeDataProvider = new SqlTreeDataProvider();
 export const bigqueryTableSchemaService = new BigqueryTableSchemaService();
 
 export const QUERY_RESULTS_VIEW_TYPE = "bigquery-query-results";
@@ -196,36 +197,8 @@ export function activate(context: ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
-			commands.COMMAND_PROJECT_PIN,
-			commands.commandPinOrUnpinProject
-		)
-	);
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand(
-			commands.COMMAND_PROJECT_HIDE,
-			commands.commandHideProject
-		)
-	);
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand(
-			commands.COMMAND_SHOW_HIDDEN_PROJECTS,
-			commands.commandShowHiddenProjects
-		)
-	);
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand(
-			commands.OPEN_SETTING_PROJECTS,
-			commands.commandOpenSettingProjects
-		)
-	);
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand(
-			commands.OPEN_SETTING_TABLES,
-			commands.commandOpenSettingTables
+			commands.OPEN_SETTING_CONNECTIONS,
+			commands.commandOpenSettingConnections
 		)
 	);
 
@@ -440,7 +413,7 @@ export function activate(context: ExtensionContext) {
 	context.subscriptions.push(
 		vscode.window.registerTreeDataProvider(
 			'bigquery-tree-data-provider',
-			bigQueryTreeDataProvider
+			sqlTreeDataProvider
 		)
 	);
 
@@ -582,11 +555,9 @@ export function activate(context: ExtensionContext) {
 		// Refresh the explorer when its backing settings change from any source
 		// (pin/unpin on another machine via Settings Sync, manual settings.json edits) —
 		// without this the Pinned Tables folder only updates on explicit refresh.
-		if (event.affectsConfiguration(commands.SETTING_PINNED_TABLES)
-			|| event.affectsConfiguration(commands.SETTING_PINNED_PROJECTS)
-			|| event.affectsConfiguration(commands.SETTING_HIDDEN_PROJECTS)
-			|| event.affectsConfiguration(commands.SETTING_PROJECTS)
-			|| event.affectsConfiguration(commands.SETTING_TABLES)) {
+		if (event.affectsConfiguration(SETTING_CONNECTIONS)
+			|| event.affectsConfiguration(SETTING_ACTIVE_CONNECTION)
+			|| event.affectsConfiguration(SETTING_PINNED_OBJECTS)) {
 			vscode.commands.executeCommand(commands.COMMAND_EXPLORER_REFRESH);
 		}
 	});

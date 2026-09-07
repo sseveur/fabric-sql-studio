@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
 import { BigQueryClient } from './services/bigqueryClient';
-import { SqlConnectionTarget, SqlServerClient } from './services/sqlServerClient';
+import { clientFor, disposeAllClients } from './services/sqlServerClient';
 import { SqlResultMessage } from './tableResultsPanel/resultContract';
-import { bigQueryTreeDataProvider, QUERY_RESULTS_VIEW_TYPE, TABLE_RESULTS_VIEW_TYPE, authenticationWebviewProvider, bigqueryTableSchemaService } from './extension';
+import { sqlTreeDataProvider, QUERY_RESULTS_VIEW_TYPE, TABLE_RESULTS_VIEW_TYPE, authenticationWebviewProvider, bigqueryTableSchemaService } from './extension';
 import { Authentication } from './services/authentication';
 import { describeToken, getAccessToken, SCOPE_FABRIC, SCOPE_TDS, signIn, signOut } from './services/auth';
-import { BigqueryTreeItem, BigqueryTreeItemType } from './activitybar/bigqueryTreeItem';
+import { getActiveConnection, getConnection, pinObject, setActiveConnection, unpinObject, SETTING_CONNECTIONS } from './services/connections';
+import { ConnectionRef, ObjectRef, displayName, qualifiedName, refToKey } from './services/objectRef';
 import { SchemaRender } from './tableResultsPanel/schemaRender';
 import { QueryGeneratorService } from './services/queryGeneratorService';
 import { ResultsGridRender } from './tableResultsPanel/resultsGridRender';
@@ -49,18 +50,10 @@ export const COMMAND_VIEW_TABLE_SCHEMA = "vscode-bigquery.view-table-schema";
 export const COMMAND_CREATE_TABLE_DEFAULT_QUERY = "vscode-bigquery.create-table-default-query";
 export const COMMAND_OPEN_DDL = "vscode-bigquery.open-ddl";
 export const COMMAND_SET_DEFAULT_PROJECT = "vscode-bigquery.set-default-project";
-export const COMMAND_PROJECT_PIN = "vscode-bigquery.project-pin";
 export const COMMAND_DOWNLOAD_CSV = "vscode-bigquery.download-csv";
 export const COMMAND_DOWNLOAD_JSONL = "vscode-bigquery.download-jsonl";
 export const COMMAND_COPY_CLIPBOARD = "vscode-bigquery.copy-to-clipboard";
-export const SETTING_PINNED_PROJECTS = "vscode-bigquery.pinned-projects";
-export const SETTING_PROJECTS = "vscode-bigquery.projects";
-export const SETTING_TABLES = "vscode-bigquery.tables";
-export const SETTING_HIDDEN_PROJECTS = "vscode-bigquery.hidden-projects";
-export const COMMAND_PROJECT_HIDE = "vscode-bigquery.project-hide";
-export const COMMAND_SHOW_HIDDEN_PROJECTS = "vscode-bigquery.show-hidden-projects";
-export const OPEN_SETTING_PROJECTS = "vscode-bigquery.open-settings-projects";
-export const OPEN_SETTING_TABLES = "vscode-bigquery.open-settings-tables";
+export const OPEN_SETTING_CONNECTIONS = "vscode-bigquery.open-settings-connections";
 export const COMMAND_FORMAT_QUERY = "vscode-bigquery.format-query";
 export const COMMAND_HISTORY_RERUN = "vscode-bigquery.history-rerun";
 export const COMMAND_HISTORY_COPY = "vscode-bigquery.history-copy";
@@ -83,7 +76,6 @@ export const COMMAND_PIN_TABLE = "vscode-bigquery.pin-table";
 export const COMMAND_UNPIN_TABLE = "vscode-bigquery.unpin-table";
 export const COMMAND_SEARCH_TABLES = "vscode-bigquery.search-tables";
 export const COMMAND_CLEAR_SEARCH = "vscode-bigquery.clear-search";
-export const SETTING_PINNED_TABLES = "vscode-bigquery.pinned-tables";
 export const COMMAND_COPY_TABLE_PATH = "vscode-bigquery.copy-table-path";
 export const COMMAND_BUILD_TABLE_INDEX = "vscode-bigquery.build-table-index";
 export const COMMAND_OPEN_AS_NOTEBOOK = "vscode-bigquery.open-as-notebook";
@@ -218,16 +210,16 @@ export const commandPreviewTableAtCursor = async function (...args: any[]) {
 		return;
 	}
 
+	const conn = getActiveConnection();
+	if (!conn) { return warnNoConnection(); }
+
 	const document = textEditor.document;
 	const sql = document.getText();
 	const offset = document.offsetAt(textEditor.selection.active);
 
-	const bqClient = await getBigQueryClient();
-	const defaultProjectId = await bqClient.getProjectId();
-
 	let resolved = null;
 	try {
-		resolved = await resolveTableAtPosition(sql, offset, defaultProjectId);
+		resolved = await resolveTableAtPosition(sql, offset, conn.database);
 	} catch (err) {
 		vscode.window.showErrorMessage(`Preview table: ${(err as Error).message || err}`);
 		return;
@@ -238,17 +230,9 @@ export const commandPreviewTableAtCursor = async function (...args: any[]) {
 		return;
 	}
 
-	const item = new BigqueryTreeItem(
-		BigqueryTreeItemType.table,
-		resolved.projectId,
-		resolved.datasetId,
-		resolved.tableId,
-		resolved.tableId,
-		'',
-		false,
-		vscode.TreeItemCollapsibleState.None
-	);
-	await commandViewTable(item);
+	// The resolver still speaks project.dataset.table; for T-SQL that is database.schema.name.
+	const ref: ObjectRef = { conn: conn.id, database: resolved.projectId || conn.database, schema: resolved.datasetId, name: resolved.tableId, kind: 'table' };
+	await commandViewTable({ ref });
 };
 
 enum RunQueryType {
@@ -328,154 +312,12 @@ const runQuery = async function (globalState: vscode.Memento, queryResultsWebvie
 		});
 	}
 
-	// Fabric / SQL Server path (port M2). Active whenever a connection is configured; the
-	// BigQuery path below is retired in M3.
-	const sqlTarget = getSqlTarget();
-	if (sqlTarget) {
-		return runSqlQuery(resultsGridRender, sqlTarget, queryText, queryStartTime);
+	const conn = getActiveConnection();
+	if (!conn) {
+		warnNoConnection();
+		return 0;
 	}
-
-	try {
-		let _postMessageResult1 = await resultsGridRender.postMessage({
-			requestType: ResultsGridRenderRequestV2Type.clear.toString(),
-			projectId: null,
-			token: null,
-			job: null,
-			error: null
-		} as ResultsGridRenderRequestV2);
-
-		const bqClient = await getBigQueryClient();
-		const projectId = await bqClient.getProjectId();
-		// console.log('projectId:', projectId);
-		const token = await bqClient.getToken();
-		// console.log('token:', token);
-		const job = await bqClient.runQuery(queryText);
-
-		// Persist the job reference on the editor's mapping so follow-up extension-side
-		// features (Profile Column, etc.) can find the most recent job without having
-		// to round-trip through the grid webview.
-		try {
-			const jobRefMeta = job.metadata?.jobReference;
-			if (jobRefMeta?.jobId && jobRefMeta?.projectId) {
-				await QueryResultsMappingService.updateQueryResultsMapping(globalState, uuid, {
-					jobReferences: [{
-						projectId: jobRefMeta.projectId,
-						jobId: jobRefMeta.jobId,
-						location: jobRefMeta.location ?? ''
-					}],
-					jobIndex: 0
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
-				} as any);
-			}
-		} catch { /* non-fatal */ }
-
-
-		let _postMessageResult2 = await resultsGridRender.postMessage({
-			requestType: ResultsGridRenderRequestV2Type.executeQuery.toString(),
-			projectId: projectId,
-			token: token,
-			job: job.metadata,
-			error: null
-		} as ResultsGridRenderRequestV2);
-
-		// Add to query history on success
-		if (queryHistoryService) {
-			const bytesProcessed = job.metadata?.statistics?.totalBytesProcessed || 0;
-			await queryHistoryService.addEntry({
-				query: queryText,
-				timestamp: queryStartTime,
-				bytesProcessed: parseInt(bytesProcessed.toString(), 10),
-				durationMs: Date.now() - queryStartTime,
-				projectId: projectId || 'unknown',
-				status: 'success'
-			});
-		}
-
-		// Check if auto-preview setting is enabled and this is CREATE TABLE
-		const config = vscode.workspace.getConfiguration('vscode-bigquery');
-		const autoPreview = config.get('autoPreviewCreatedTables', false);
-		console.log('[Auto-Preview] Setting enabled:', autoPreview);
-
-		const isCreateTable = isCreateTableStatement(queryText);
-		console.log('[Auto-Preview] Is CREATE TABLE:', isCreateTable);
-
-		// Don't check job state here - the job may still be running
-		// If we got here without throwing, the query was submitted successfully
-		// The webview will handle fetching results asynchronously
-		if (autoPreview && isCreateTable) {
-			const createdTable = extractCreatedTableName(queryText);
-
-			if (createdTable) {
-				// Wait briefly for table to be available
-				await new Promise(resolve => setTimeout(resolve, 500));
-
-				// Run SELECT * LIMIT 100 on created table
-				const previewQuery = `SELECT * FROM ${createdTable} LIMIT 100`;
-
-				try {
-					console.log('[Auto-Preview] Running preview query:', previewQuery);
-					const previewJob = await bqClient.runQuery(previewQuery);
-					console.log('[Auto-Preview] Preview job succeeded:', previewJob.metadata?.statistics);
-
-					// Send preview results to same webview panel
-					await resultsGridRender.postMessage({
-						requestType: ResultsGridRenderRequestV2Type.executeQuery.toString(),
-						projectId: projectId,
-						token: token,
-						job: previewJob.metadata,
-						error: null
-					} as ResultsGridRenderRequestV2);
-
-					const rowCount = previewJob.metadata?.statistics?.query?.totalBytesProcessed || 'unknown';
-					console.log('[Auto-Preview] Posted preview results to webview');
-					vscode.window.showInformationMessage(
-						`Table created successfully. Showing preview (first 100 rows).`
-					);
-				} catch (previewError) {
-					console.error('[Auto-Preview] Failed to preview created table:', previewError);
-					vscode.window.showWarningMessage(
-						`Table created successfully, but preview failed: ${(previewError as any).message}`
-					);
-				}
-			}
-		}
-
-	} catch (errorx) {
-		// resultsGridRender.renderException(error);
-		const error =
-		{
-			message: (errorx as any).message || 'undefined message',
-			reason: ''
-		};
-
-		let _postMessageResult3 = await resultsGridRender.postMessage({
-			requestType: ResultsGridRenderRequestV2Type.error.toString(),
-			projectId: null,
-			token: null,
-			job: null,
-			error: error
-		} as ResultsGridRenderRequestV2);
-
-		// Add to query history on error
-		if (queryHistoryService) {
-			let errorProjectId = 'unknown';
-			try {
-				const bqClient = await getBigQueryClient();
-				errorProjectId = await bqClient.getProjectId() || 'unknown';
-			} catch { }
-			await queryHistoryService.addEntry({
-				query: queryText,
-				timestamp: queryStartTime,
-				bytesProcessed: 0,
-				durationMs: Date.now() - queryStartTime,
-				projectId: errorProjectId,
-				status: 'error',
-				errorMessage: error.message
-			});
-		}
-	}
-
-	return 0;
+	return runSqlQuery(resultsGridRender, conn, queryText, queryStartTime);
 };
 
 export const commandUserLogin = async function (...args: any[]) {
@@ -532,215 +374,81 @@ export const commandExplorerRefresh = function (...args: any[]) {
 
 	const t1 = Date.now();
 
-	bigQueryTreeDataProvider.refresh();
+	sqlTreeDataProvider.refresh();
 
 };
 
 export const commandViewTable = async function (...args: any[]) {
 
-	const t1 = Date.now();
+	const ref: ObjectRef | undefined = args[0]?.ref;
+	if (!ref?.name) { return; }
+	const conn = getConnection(ref.conn);
+	if (!conn) { return warnNoConnection(); }
 
-	const item = args[0] as BigqueryTreeItem;
-
-	const title = `${item.projectId}.${item.datasetId}.${item.tableId}`;
-
-	if (item.projectId === null || item.datasetId === null || item.tableId === null) {
-		return;
-	}
-
-	if (item.treeItemType === BigqueryTreeItemType.tableView) {
-
-		await openQueryEditor(item);
-
-	} else {
-
-		const bqClient = await getBigQueryClient();
-
-		const table = bqClient.getTable(item.projectId, item.datasetId, item.tableId);
-		const metadata = await table.getMetadata();
-
-		// VIEW catches table refs resolved from the editor (no tree item type available);
-		// tabledata.list doesn't work on views/external tables, so open a SELECT instead.
-		if (metadata[0].type === 'EXTERNAL' || metadata[0].type === 'VIEW') {
-			await openQueryEditor(item);
-		} else {
-
-			let panel: vscode.WebviewPanel;
-			if (args.length > 1 && args[1] && args[1].viewType === TABLE_RESULTS_VIEW_TYPE) {
-				panel = args[1];
-			} else {
-				panel = vscode.window.createWebviewPanel(TABLE_RESULTS_VIEW_TYPE, title, { viewColumn: vscode.ViewColumn.Active }, { enableFindWidget: true, enableScripts: true, retainContextWhenHidden: true });
-			}
-
-			const resultsGridRender = new ResultsGridRender(panel);
-
-			await resultsGridRender.render1();
-
-			// 	const request = {
-			// 		tableReference: { projectId: item.projectId, datasetId: item.datasetId, tableId: item.tableId } as TableReference,
-			// 		startIndex: 0,
-			// 		maxResults: 50,
-			// 		jobIndex: 0,
-			// 		openInTabVisible: false
-			// 	} as ResultsGridRenderRequest;
-
-			// 	newresultsGridRender.render(request);
-
-			try {
-				let _postMessageResult1 = await resultsGridRender.postMessage({
-					requestType: ResultsGridRenderRequestV2Type.clear.toString(),
-					projectId: null,
-					token: null,
-					job: null,
-					error: null
-				} as ResultsGridRenderRequestV2);
-
-				const bqClient = await getBigQueryClient();
-				// const projectId = await bqClient.getProjectId();
-				// console.log('projectId:', projectId);
-				const token = await bqClient.getToken();
-				// console.log('token:', token);
-				// const job = await bqClient.runQuery(queryText);
-				const projectId = item.projectId;
-				const datasetId = item.datasetId;
-				const tableId = item.tableId;
-
-				// const jobReferences = job.map(c => { return { jobId: c.id, projectId: c.projectId, location: c.location } as JobReference; });
-
-				let _postMessageResult2 = await resultsGridRender.postMessage({
-					requestType: ResultsGridRenderRequestV2Type.previewTable.toString(),
-					projectId: projectId,
-					datasetId: datasetId,
-					tableId: tableId,
-					token: token,
-					job: null,
-					error: null
-				} as ResultsGridRenderRequestV2);
-
-			} catch (errorx) {
-				// resultsGridRender.renderException(error);
-				const error =
-				{
-					message: (errorx as any).message || 'undefined message',
-					reason: ''
-				};
-
-				let _postMessageResult3 = await resultsGridRender.postMessage({
-					requestType: ResultsGridRenderRequestV2Type.error.toString(),
-					projectId: null,
-					token: null,
-					job: null,
-					error: error
-				} as ResultsGridRenderRequestV2);
-			}
-		}
-	}
-
+	await openSqlPanel(refToKey(ref), args[1], conn, QueryGeneratorService.generatePreviewQuery(ref));
 };
-
-async function openQueryEditor(item: BigqueryTreeItem) {
-	const query = `SELECT * \nFROM \`${item.projectId}.${item.datasetId}.${item.tableId}\``;
-
-	const doc = await vscode.workspace.openTextDocument({
-		language: 'bqsql',
-		content: query
-	});
-
-	doc.positionAt(7);
-}
 
 export const commandViewTableSchema = async function (...args: any[]) {
 
-	const item = args[0] as BigqueryTreeItem;
+	const ref: ObjectRef | undefined = args[0]?.ref;
+	if (!ref?.name) { return; }
+	const conn = getConnection(ref.conn);
+	if (!conn) { return warnNoConnection(); }
 
-	const title = `Schema: ${item.projectId}.${item.datasetId}.${item.tableId}`;
-
-	if (item.projectId === null || item.datasetId === null || item.tableId === null) {
-		return;
-	}
-	const bqClient = await getBigQueryClient();
-
-	const metadataPromise = bqClient.getMetadata(item.projectId, item.datasetId, item.tableId);
-	const panel = vscode.window.createWebviewPanel("vscode-bigquery-table-schema", title, { viewColumn: vscode.ViewColumn.Active }, { enableFindWidget: true, enableScripts: true, retainContextWhenHidden: true });
-	const schemaRender = new SchemaRender(panel.webview);
-
-	schemaRender.render(metadataPromise);
-
+	await openSqlPanel(`Schema: ${displayName(ref)}`, undefined, conn, QueryGeneratorService.generateSchemaQuery(ref));
 };
+
+/** Runs `sql` into a table-results panel (reused when the serializer hands one back). */
+async function openSqlPanel(title: string, existingPanel: vscode.WebviewPanel | undefined, conn: ConnectionRef, sql: string): Promise<void> {
+	const panel = existingPanel && existingPanel.viewType === TABLE_RESULTS_VIEW_TYPE
+		? existingPanel
+		: vscode.window.createWebviewPanel(TABLE_RESULTS_VIEW_TYPE, title, { viewColumn: vscode.ViewColumn.Active }, { enableFindWidget: true, enableScripts: true, retainContextWhenHidden: true });
+
+	const resultsGridRender = new ResultsGridRender(panel);
+	await resultsGridRender.render1();
+	await runSqlQuery(resultsGridRender, conn, sql, Date.now(), false);
+}
 
 export const commandCreateTableDefaultQuery = async function (...args: any[]) {
 
-	const t1 = Date.now();
-
-	const item = args[0] as BigqueryTreeItem;
-
-	if (item.projectId === null || item.datasetId === null || item.tableId === null) {
-		return;
-	}
-
-	let query = QueryGeneratorService.generateSelectQuerySimple(item.projectId, item.datasetId, item.tableId);
-	try {
-		const bqClient = await getBigQueryClient();
-		const metadata = await bqClient.getMetadata(item.projectId, item.datasetId, item.tableId);
-		query = QueryGeneratorService.generateSelectQuery(metadata);
-	} catch (error) { }
+	const ref: ObjectRef | undefined = args[0]?.ref;
+	if (!ref?.name) { return; }
 
 	const doc = await vscode.workspace.openTextDocument({
 		language: 'bqsql',
-		content: query
+		content: QueryGeneratorService.generateSelectQuery(ref)
 	});
-
 	await vscode.commands.executeCommand<vscode.TextDocumentShowOptions>("vscode.open", doc.uri);
-
-
 };
 
+/** Views, procedures and functions carry a definition; tables have no stored DDL in T-SQL. */
 export const commandOpenDdl = async function (...args: any[]) {
 
-	const t1 = Date.now();
-
-	const item = args[0] as BigqueryTreeItem;
-
-	if (item.projectId === null || item.datasetId === null || item.tableId === null) {
-		return;
-	}
+	const ref: ObjectRef | undefined = args[0]?.ref;
+	if (!ref?.name) { return; }
+	const conn = getConnection(ref.conn);
+	if (!conn) { return warnNoConnection(); }
 
 	try {
-
-		let query = QueryGeneratorService.generateDdlQuery(item);
-		const bqClient = await getBigQueryClient();
-
-		const queryRun = await bqClient.runQuery(query);
-		const queryResult = await queryRun.getQueryResults();
-		const ddl = queryResult[0][0].ddl;
-
-		const doc = await vscode.workspace.openTextDocument({
-			language: 'bqsql',
-			content: ddl
-		});
-
+		const rows = await clientFor(conn).query(QueryGeneratorService.generateDefinitionQuery(ref));
+		const definition = rows[0]?.[0];
+		if (typeof definition !== 'string' || !definition.trim()) {
+			vscode.window.showInformationMessage(`${displayName(ref)} has no stored definition (tables don't; use Preview Schema).`);
+			return;
+		}
+		const doc = await vscode.workspace.openTextDocument({ language: 'bqsql', content: definition });
 		await vscode.commands.executeCommand<vscode.TextDocumentShowOptions>("vscode.open", doc.uri);
-
-	} catch (error) {
-		vscode.window.showErrorMessage(JSON.stringify(error));
+	} catch (error: any) {
+		vscode.window.showErrorMessage(`Open definition failed: ${error?.message ?? error}`);
 	}
-
-
 };
 
-export const commandSetDefaultProject = function (...args: any[]) {
+export const commandSetDefaultProject = async function (...args: any[]) {
 
-	resetBigQueryClient();
-
-	const item = args[0] as BigqueryTreeItem;
-
-	Authentication.setDefaultProjectId(item.projectId || 'xxx')
-		.then(result => {
-			vscode.commands.executeCommand(COMMAND_EXPLORER_REFRESH);
-
-			resetBigQueryClient();
-		});
-
+	const ref: ObjectRef | undefined = args[0]?.ref;
+	if (!ref?.conn) { return; }
+	await setActiveConnection(ref.conn);
+	vscode.commands.executeCommand(COMMAND_EXPLORER_REFRESH);
 };
 
 export const commandDownloadCsv = async function (this: any, ...args: any[]) {
@@ -894,152 +602,36 @@ export const commandCopyToClipboard = async function (this: any, ...args: any[])
 	}
 };
 
-export const commandPinOrUnpinProject = async function (...args: any[]) {
-
-	const item = args[0] as BigqueryTreeItem;
-	const projectId = item.projectId || 'xxx';
-
-	const current = (vscode.workspace
-		.getConfiguration()
-		.get(SETTING_PINNED_PROJECTS) as string[]) || [];
-
-	let pinnedProjects: string[];
-	let action: 'pinned' | 'unpinned';
-	if (current.indexOf(projectId) >= 0) {
-		pinnedProjects = current.filter(c => c && c !== projectId);
-		action = 'unpinned';
-	} else {
-		pinnedProjects = [...current, projectId];
-		action = 'pinned';
-	}
-
-	try {
-		await vscode.workspace
-			.getConfiguration()
-			.update(SETTING_PINNED_PROJECTS, pinnedProjects, vscode.ConfigurationTarget.Global);
-		vscode.window.showInformationMessage(`Project "${projectId}" ${action}.`);
-		vscode.commands.executeCommand(COMMAND_EXPLORER_REFRESH);
-	} catch (err) {
-		vscode.window.showErrorMessage(`Failed to ${action === 'pinned' ? 'pin' : 'unpin'} project: ${(err as any)?.message || err}`);
-	}
+export const commandOpenSettingConnections = async function () {
+	vscode.commands.executeCommand('workbench.action.openSettings', SETTING_CONNECTIONS);
 };
 
-export const commandHideProject = async function (...args: any[]) {
-
-	const item = args[0] as BigqueryTreeItem;
-	const projectId = item.projectId || 'xxx';
-
-	const current = (vscode.workspace
-		.getConfiguration()
-		.get(SETTING_HIDDEN_PROJECTS) as string[]) || [];
-
-	const hiddenProjects = current.indexOf(projectId) < 0
-		? [...current, projectId]
-		: current;
-
-	try {
-		await vscode.workspace
-			.getConfiguration()
-			.update(SETTING_HIDDEN_PROJECTS, hiddenProjects, vscode.ConfigurationTarget.Global);
-		vscode.commands.executeCommand(COMMAND_EXPLORER_REFRESH);
-		vscode.window.showInformationMessage(`Project "${projectId}" hidden. Use "BigQuery: Show Hidden Projects" command to unhide.`);
-	} catch (err) {
-		vscode.window.showErrorMessage(`Failed to hide project: ${(err as any)?.message || err}`);
-	}
-};
-
-export const commandShowHiddenProjects = async function () {
-
-	const hiddenProjects = vscode.workspace
-		.getConfiguration()
-		.get(SETTING_HIDDEN_PROJECTS) as string[] || [];
-
-	if (hiddenProjects.length === 0) {
-		vscode.window.showInformationMessage('No hidden projects');
-		return;
-	}
-
-	const selected = await vscode.window.showQuickPick(
-		hiddenProjects.map(projectId => ({
-			label: projectId,
-			description: 'Click to unhide'
-		})),
-		{
-			placeHolder: 'Select a project to unhide',
-			canPickMany: false
-		}
-	);
-
-	if (selected) {
-		const updatedHiddenProjects = hiddenProjects.filter(c => c !== selected.label);
-
-		await vscode.workspace
-			.getConfiguration()
-			.update(SETTING_HIDDEN_PROJECTS, updatedHiddenProjects, vscode.ConfigurationTarget.Global);
-
-		vscode.commands.executeCommand(COMMAND_EXPLORER_REFRESH);
-
-		vscode.window.showInformationMessage(`Project "${selected.label}" is now visible`);
-	}
-};
-
-export const commandOpenSettingProjects = async function (this: any, ...args: any[]) {
-
-	const t1 = Date.now();
-
-	vscode.commands.executeCommand('workbench.action.openWorkspaceSettings', 'vscode-bigquery.projects');
-
-
-};
-
-export const commandOpenSettingTables = async function (this: any, ...args: any[]) {
-
-	const t1 = Date.now();
-
-	vscode.commands.executeCommand('workbench.action.openWorkspaceSettings', 'vscode-bigquery.tables');
-
-
-};
-
+function warnNoConnection(): void {
+	vscode.window.showWarningMessage('No connection configured. Add one in settings (vscode-bigquery.connections).', 'Open Settings')
+		.then(c => { if (c) { vscode.commands.executeCommand(OPEN_SETTING_CONNECTIONS); } });
+}
 
 // ---- T-SQL execution (Fabric Warehouse / Lakehouse SQL endpoint, Azure SQL, SQL Server) ----
 
-function getSqlTarget(): SqlConnectionTarget | null {
-	const cfg = vscode.workspace.getConfiguration('vscode-bigquery').get<{ server?: string; database?: string; port?: number }>('connection');
-	const server = cfg?.server?.trim();
-	if (!server) { return null; }
-	return { server, database: cfg?.database?.trim() ?? '', port: cfg?.port };
-}
-
-let sqlClient: SqlServerClient | null = null;
-
-async function getSqlClient(target: SqlConnectionTarget): Promise<SqlServerClient> {
-	if (sqlClient && (sqlClient.target.server !== target.server || sqlClient.target.database !== target.database)) {
-		await sqlClient.dispose();
-		sqlClient = null;
-	}
-	if (!sqlClient) { sqlClient = new SqlServerClient(target); }
-	return sqlClient;
-}
-
-async function runSqlQuery(resultsGridRender: ResultsGridRender, target: SqlConnectionTarget, queryText: string, queryStartTime: number): Promise<number> {
+async function runSqlQuery(resultsGridRender: ResultsGridRender, conn: ConnectionRef, queryText: string, queryStartTime: number, recordHistory = true): Promise<number> {
 	await resultsGridRender.postMessage({
 		requestType: ResultsGridRenderRequestV2Type.clear.toString(),
 		projectId: null, token: null, job: null, error: null
 	} as ResultsGridRenderRequestV2);
 
 	try {
-		const client = await getSqlClient(target);
 		const maxRows = vscode.workspace.getConfiguration('vscode-bigquery').get<number>('maxRows', 100000);
-		const result = await client.runQuery(queryText, maxRows);
+		const result = await clientFor(conn).runQuery(queryText, maxRows);
 
 		const msg: SqlResultMessage = { requestType: 'sql_result', resultId: result.id, sets: result.sets, elapsedMs: result.elapsedMs };
 		await resultsGridRender.postMessage(msg);
 
-		await queryHistoryService?.addEntry({
-			query: queryText, timestamp: queryStartTime, bytesProcessed: 0,
-			durationMs: Date.now() - queryStartTime, projectId: `${target.server}/${target.database}`, status: 'success'
-		});
+		if (recordHistory) {
+			await queryHistoryService?.addEntry({
+				query: queryText, timestamp: queryStartTime, bytesProcessed: 0,
+				durationMs: Date.now() - queryStartTime, projectId: conn.id, status: 'success'
+			});
+		}
 		return result.sets.length;
 	} catch (errorx: any) {
 		const message = errorx?.message || 'undefined message';
@@ -1048,14 +640,15 @@ async function runSqlQuery(resultsGridRender: ResultsGridRender, target: SqlConn
 			projectId: null, token: null, job: null,
 			error: { message, reason: errorx?.number ? `SQL error ${errorx.number}` : '' }
 		} as ResultsGridRenderRequestV2);
-		await queryHistoryService?.addEntry({
-			query: queryText, timestamp: queryStartTime, bytesProcessed: 0,
-			durationMs: Date.now() - queryStartTime, projectId: `${target.server}/${target.database}`, status: 'error', errorMessage: message
-		});
+		if (recordHistory) {
+			await queryHistoryService?.addEntry({
+				query: queryText, timestamp: queryStartTime, bytesProcessed: 0,
+				durationMs: Date.now() - queryStartTime, projectId: conn.id, status: 'error', errorMessage: message
+			});
+		}
 		return 0;
 	}
 }
-
 
 let bigQueryClient: BigQueryClient | null;
 
@@ -1070,8 +663,7 @@ export const getBigQueryClient = async function (): Promise<BigQueryClient> {
 };
 
 const resetBigQueryClient = function () {
-	sqlClient?.dispose();
-	sqlClient = null;
+	disposeAllClients();
 	bigQueryClient = null;
 };
 
@@ -1430,61 +1022,19 @@ export const commandRevokeSession = async function (...args: any[]) {
 	}
 };
 
-// Pin Table
+// Pin / unpin object
 export const commandPinTable = async function (...args: any[]) {
-
-	const item = args[0] as BigqueryTreeItem;
-
-	if (!item.projectId || !item.datasetId || !item.tableId) {
-		return;
-	}
-
-	const tableRef = `${item.projectId}.${item.datasetId}.${item.tableId}`;
-
-	const current = (vscode.workspace
-		.getConfiguration()
-		.get(SETTING_PINNED_TABLES) as string[]) || [];
-
-	// Case-insensitive dedupe — a previously stored entry with different casing
-	// must not produce a duplicate pin.
-	const exists = current.some(c => c.trim().toLowerCase() === tableRef.toLowerCase());
-	const pinnedTables = exists ? current : [...current, tableRef];
-
-	try {
-		await vscode.workspace
-			.getConfiguration()
-			.update(SETTING_PINNED_TABLES, pinnedTables, vscode.ConfigurationTarget.Global);
-		vscode.commands.executeCommand(COMMAND_EXPLORER_REFRESH);
-	} catch (err) {
-		vscode.window.showErrorMessage(`Failed to pin table: ${(err as any)?.message || err}`);
-	}
+	const ref: ObjectRef | undefined = args[0]?.ref;
+	if (!ref?.name) { return; }
+	await pinObject(ref);
+	vscode.commands.executeCommand(COMMAND_EXPLORER_REFRESH);
 };
 
-// Unpin Table
 export const commandUnpinTable = async function (...args: any[]) {
-
-	const item = args[0] as BigqueryTreeItem;
-
-	if (!item.projectId || !item.datasetId || !item.tableId) {
-		return;
-	}
-
-	const tableRef = `${item.projectId}.${item.datasetId}.${item.tableId}`;
-
-	const current = (vscode.workspace
-		.getConfiguration()
-		.get(SETTING_PINNED_TABLES) as string[]) || [];
-
-	const pinnedTables = current.filter(c => c.trim().toLowerCase() !== tableRef.toLowerCase());
-
-	try {
-		await vscode.workspace
-			.getConfiguration()
-			.update(SETTING_PINNED_TABLES, pinnedTables, vscode.ConfigurationTarget.Global);
-		vscode.commands.executeCommand(COMMAND_EXPLORER_REFRESH);
-	} catch (err) {
-		vscode.window.showErrorMessage(`Failed to unpin table: ${(err as any)?.message || err}`);
-	}
+	const ref: ObjectRef | undefined = args[0]?.ref;
+	if (!ref?.name) { return; }
+	await unpinObject(ref);
+	vscode.commands.executeCommand(COMMAND_EXPLORER_REFRESH);
 };
 
 // Search Tables (uses local index from globalState)
@@ -1515,16 +1065,16 @@ export const commandSearchTables = async function (...args: any[]) {
 	}
 
 	if (term === '') {
-		bigQueryTreeDataProvider.setSearchTerm(null);
+		sqlTreeDataProvider.setSearchTerm(null);
 		return;
 	}
 
-	bigQueryTreeDataProvider.setSearchTerm(term);
+	sqlTreeDataProvider.setSearchTerm(term);
 };
 
 // Clear Search
 export const commandClearSearch = function (...args: any[]) {
-	bigQueryTreeDataProvider.setSearchTerm(null);
+	sqlTreeDataProvider.setSearchTerm(null);
 };
 
 // Build Table Index
@@ -1537,21 +1087,13 @@ export const commandBuildTableIndex = async function (...args: any[]) {
 	vscode.window.showInformationMessage(`Table index built: ${count} tables indexed`);
 };
 
-// Copy Table Path
+// Copy object path — bracket-quoted by default so it pastes straight into a FROM clause.
 export const commandCopyTablePath = async function (...args: any[]) {
+	const ref: ObjectRef | undefined = args[0]?.ref;
+	if (!ref?.name) { return; }
 
-	const item = args[0] as BigqueryTreeItem;
-
-	if (!item.projectId || !item.datasetId || !item.tableId) {
-		return;
-	}
-
-	const withBackticks = vscode.workspace
-		.getConfiguration('vscode-bigquery')
-		.get<boolean>('copyTablePathBackticks', true);
-
-	const raw = `${item.projectId}.${item.datasetId}.${item.tableId}`;
-	const tablePath = withBackticks ? `\`${raw}\`` : raw;
+	const quoted = vscode.workspace.getConfiguration('vscode-bigquery').get<boolean>('copyTablePathBackticks', true);
+	const tablePath = quoted ? qualifiedName(ref) : displayName(ref);
 	await vscode.env.clipboard.writeText(tablePath);
 	vscode.window.showInformationMessage(`Copied: ${tablePath}`);
 };

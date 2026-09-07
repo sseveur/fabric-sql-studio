@@ -1,20 +1,14 @@
 import * as vscode from 'vscode';
 import { COMMAND_VIEW_TABLE } from '../extensionCommands';
-import { TableReference } from '../services/tableMetadata';
+import { parseKey } from '../services/objectRef';
 
+/** Restores a table-preview panel after restart: the panel title is the object's ref key. */
 export class TableResultsSerializer implements vscode.WebviewPanelSerializer {
 
-    deserializeWebviewPanel(webviewPanel: vscode.WebviewPanel, state: any): Thenable<void> {
-
-        const titleSplit = webviewPanel.title.split('.');
-        if (titleSplit.length === 3) {
-
-            const tableReference = { projectId: titleSplit[0], datasetId: titleSplit[1], tableId: titleSplit[2], } as TableReference;
-
-            vscode.commands.executeCommand(COMMAND_VIEW_TABLE, tableReference, webviewPanel);
+    async deserializeWebviewPanel(webviewPanel: vscode.WebviewPanel, _state: any): Promise<void> {
+        const ref = parseKey(webviewPanel.title);
+        if (ref && ref.name) {
+            vscode.commands.executeCommand(COMMAND_VIEW_TABLE, { ref }, webviewPanel);
         }
-
-        // throw new Error('Method not implemented.');
-        return new Promise((resolve, reject) => { resolve(undefined); });
     }
 }

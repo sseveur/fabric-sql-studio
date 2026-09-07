@@ -1,104 +1,62 @@
 import * as vscode from 'vscode';
-import { BigQuery } from '@google-cloud/bigquery';
-import { getBigQueryClient, SETTING_PROJECTS, SETTING_TABLES } from '../extensionCommands';
-import { Authentication } from './authentication';
-import { TableReference } from './tableMetadata';
-
-export interface TableIndexEntry {
-    projectId: string;
-    datasetId: string;
-    tableId: string;
-}
+import { getConnections } from './connections';
+import { bracket, ObjectRef } from './objectRef';
+import { clientFor } from './sqlServerClient';
 
 interface TableIndexData {
-    entries: TableIndexEntry[];
+    entries: ObjectRef[];
     builtAt: number;
 }
 
 const STORAGE_KEY = 'bigquery-table-index';
 
+/** Local index of every table/view across all connections, for the explorer's search mode. */
 export class TableIndexService {
-    private globalState: vscode.Memento;
 
-    constructor(globalState: vscode.Memento) {
-        this.globalState = globalState;
-    }
+    constructor(private readonly globalState: vscode.Memento) { }
 
-    public getIndex(): TableIndexEntry[] {
-        const data = this.globalState.get<TableIndexData>(STORAGE_KEY);
-        return data?.entries || [];
+    public getIndex(): ObjectRef[] {
+        return this.globalState.get<TableIndexData>(STORAGE_KEY)?.entries || [];
     }
 
     public getBuiltAt(): number | null {
-        const data = this.globalState.get<TableIndexData>(STORAGE_KEY);
-        return data?.builtAt || null;
+        return this.globalState.get<TableIndexData>(STORAGE_KEY)?.builtAt || null;
     }
 
-    public search(term: string): TableIndexEntry[] {
-        const lowerTerm = term.toLowerCase();
-        return this.getIndex().filter(e =>
-            e.tableId.toLowerCase().includes(lowerTerm)
-        );
+    public search(term: string): ObjectRef[] {
+        const q = term.toLowerCase();
+        return this.getIndex().filter(e => (e.name || '').toLowerCase().includes(q));
     }
 
     public async buildIndex(): Promise<number> {
         return vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: 'Building table index...', cancellable: true },
-            async (progress, cancellationToken) => {
-                const entries: TableIndexEntry[] = [];
+            async (progress, token) => {
+                const entries: ObjectRef[] = [];
+                const conns = getConnections();
 
-                const bqClient = await getBigQueryClient();
-                const bqProjects = await bqClient.getProjects();
-
-                let projectIds = this.getProjectsFromSettings();
-                for (const project of bqProjects.projects || []) {
-                    const projectId = (project.id || 'xxx').toLowerCase();
-                    if (projectIds.indexOf(projectId) < 0) {
-                        projectIds.push(projectId);
-                    }
-                }
-
-                const totalProjects = projectIds.length;
-
-                for (let i = 0; i < projectIds.length; i++) {
-                    if (cancellationToken.isCancellationRequested) { break; }
-
-                    const projectId = projectIds[i];
-                    progress.report({ message: `Scanning ${projectId} (${i + 1}/${totalProjects})...`, increment: (100 / totalProjects) });
-
+                for (let i = 0; i < conns.length; i++) {
+                    if (token.isCancellationRequested) { break; }
+                    const conn = conns[i];
+                    progress.report({ message: `Scanning ${conn.id} (${i + 1}/${conns.length})...`, increment: 100 / conns.length });
                     try {
-                        const bigqueryClient = new BigQuery({ projectId });
-                        const datasets = await bigqueryClient.getDatasets({ all: true, filter: '' });
-                        const datasetList = datasets[0].filter(c => c.id !== null && (!c.id?.startsWith('_')));
-
-                        // Fetch tables from all datasets in parallel
-                        const datasetPromises = datasetList.map(async dataset => {
-                            if (cancellationToken.isCancellationRequested) { return; }
+                        const client = clientFor(conn);
+                        const dbs = (await client.query(`SELECT name FROM sys.databases WHERE state = 0`)).map(r => String(r[0]));
+                        for (const database of dbs) {
+                            if (token.isCancellationRequested) { break; }
                             try {
-                                const datasetId = dataset.id ?? 'xxx';
-                                const getTablesResponse = await dataset.getTables();
-                                const tables = getTablesResponse[0]
-                                    .filter(c => c.id !== null && (!c.id?.startsWith('_')));
-
-                                for (const table of tables) {
-                                    entries.push({
-                                        projectId,
-                                        datasetId,
-                                        tableId: table.id ?? 'xxx'
-                                    });
+                                const rows = await client.query(
+                                    `SELECT s.name, o.name, RTRIM(o.type) FROM ${bracket(database)}.sys.objects o ` +
+                                    `JOIN ${bracket(database)}.sys.schemas s ON s.schema_id = o.schema_id WHERE o.type IN ('U','V')`);
+                                for (const r of rows) {
+                                    entries.push({ conn: conn.id, database, schema: String(r[0]), name: String(r[1]), kind: String(r[2]) === 'V' ? 'view' : 'table' });
                                 }
-                            } catch (error) { }
-                        });
-
-                        await Promise.all(datasetPromises);
-                    } catch (error) { }
+                            } catch { /* database not accessible — skip */ }
+                        }
+                    } catch { /* connection failed — skip */ }
                 }
 
-                await this.globalState.update(STORAGE_KEY, {
-                    entries,
-                    builtAt: Date.now()
-                } as TableIndexData);
-
+                await this.globalState.update(STORAGE_KEY, { entries, builtAt: Date.now() } as TableIndexData);
                 return entries.length;
             }
         );
@@ -106,28 +64,5 @@ export class TableIndexService {
 
     public async clearIndex(): Promise<void> {
         await this.globalState.update(STORAGE_KEY, undefined);
-    }
-
-    private getProjectsFromSettings(): string[] {
-        let projects = (vscode.workspace
-            .getConfiguration()
-            .get(SETTING_PROJECTS) as string[] || [])
-            .map(c => (c as string).toLowerCase());
-
-        const tables = (vscode.workspace
-            .getConfiguration()
-            .get(SETTING_TABLES) as string[] || [])
-            .map(c => (c as string).toLowerCase())
-            .map(c => c.split('.'))
-            .filter(c => c.length === 3)
-            .map(c => c[0]);
-
-        for (const projectId of tables) {
-            if (projects.indexOf(projectId) < 0) {
-                projects.push(projectId);
-            }
-        }
-
-        return projects;
     }
 }

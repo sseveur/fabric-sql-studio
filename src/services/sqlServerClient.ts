@@ -2,6 +2,7 @@ import * as sql from 'mssql';
 import { v4 as uuidv4 } from 'uuid';
 import { getAccessToken, SCOPE_TDS } from './auth';
 import { SqlColumn, SqlResultSet } from '../tableResultsPanel/resultContract';
+import { ConnectionRef } from './objectRef';
 
 /**
  * TDS client over `mssql`/tedious with an Entra access token. Serves SQL Server, Azure SQL and
@@ -17,11 +18,7 @@ export interface QueryResult {
     elapsedMs: number;
 }
 
-export interface SqlConnectionTarget {
-    server: string;
-    database: string;
-    port?: number;
-}
+export type SqlConnectionTarget = Pick<ConnectionRef, 'server' | 'database' | 'port'>;
 
 const results = new Map<string, QueryResult>();
 const MAX_KEPT_RESULTS = 20;
@@ -111,6 +108,15 @@ export class SqlServerClient {
         return result;
     }
 
+    /** Small metadata query: all rows, positional, no cap. */
+    public async query(text: string): Promise<unknown[][]> {
+        const pool = await this.getPool();
+        const request = new sql.Request(pool);
+        request.arrayRowMode = true;
+        const res = await request.query(text);
+        return ((res.recordset ?? []) as unknown as unknown[][]).map(row => row.map(jsonSafe));
+    }
+
     public async dispose(): Promise<void> {
         const p = this.pool;
         this.pool = null;
@@ -137,4 +143,20 @@ function jsonSafe(v: unknown): unknown {
     if (Buffer.isBuffer(v)) { return '0x' + v.toString('hex'); }
     if (typeof v === 'bigint') { return v.toString(); }
     return v;
+}
+
+// One client per connection profile; pools are rebuilt inside the client when the token rotates.
+const clients = new Map<string, SqlServerClient>();
+
+export function clientFor(conn: ConnectionRef): SqlServerClient {
+    const key = `${conn.server}|${conn.database}|${conn.port ?? 1433}`;
+    let c = clients.get(key);
+    if (!c) { c = new SqlServerClient(conn); clients.set(key, c); }
+    return c;
+}
+
+export async function disposeAllClients(): Promise<void> {
+    const all = [...clients.values()];
+    clients.clear();
+    await Promise.all(all.map(c => c.dispose()));
 }

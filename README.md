@@ -11,7 +11,7 @@ A powerful Visual Studio Code extension for Google BigQuery. Browse datasets and
 ## Features
 
 - **Authentication** - Sign in with a Microsoft (Entra ID) account via the VS Code Accounts menu, or reuse an Azure CLI login
-- **Project Explorer** - Browse projects, datasets, tables, views, functions, and ML models; pin/hide projects; pin tables; copy fully-qualified paths; table search across all datasets (cached index)
+- **Explorer** - Browse connections → databases → schemas → tables, views and routines straight from the catalog views; pin objects; copy bracket-quoted paths; search across connections (cached index)
 - **Query Execution** - Run queries with `Ctrl+Enter`, real-time error highlighting, byte estimation, and automatic region detection
 - **Results Grid** - Modern Preact-based grid with multi-column sort, find-in-page, schema tab, cell drawer, drag-resize, row selection with TSV/Markdown copy, density toggle, and customizable per-type cell colors
 - **Notebook Mode** - Open `.sql`/`.bqsql` as a notebook: per-cell run / cancel / exports, cell output persistence, stats line
@@ -396,20 +396,18 @@ All commands are available via the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+
 | BigQuery: Open as Notebook | Open the current `.sql`/`.bqsql` file as a BigQuery notebook |
 | BigQuery: Open as Text | Switch a notebook back to the plain SQL editor |
 | **Explorer** | |
-| BigQuery: Refresh Explorer | Refresh the project/dataset tree |
-| BigQuery: Show Hidden Projects | Unhide previously hidden projects |
+| BigQuery: Refresh Explorer | Refresh the connection tree |
 | BigQuery: Refresh Schema Cache | Clear cached table schemas |
-| BigQuery: Build Table Index | Crawl all projects/datasets/tables into a local search index |
-| BigQuery: Search Tables | Fuzzy-search tables across all indexed datasets |
+| BigQuery: Build Table Index | Crawl every database on every connection into a local search index |
+| BigQuery: Search Tables | Search tables/views across all indexed connections |
 | BigQuery: Clear Search | Clear the active table search filter |
-| BigQuery: Pin Table / Unpin Table | Pin a table to the dedicated Pinned Tables folder |
-| BigQuery: Copy Table Path | Copy `project.dataset.table` to clipboard |
-| BigQuery: View Table | Open a preview of the table's rows |
-| BigQuery: Preview Schema | Open the table/view schema |
-| BigQuery: Open DDL | Show the DDL statement for the table/view/routine |
-| BigQuery: Create Table Default Query | Open a new editor with a `SELECT *` starter |
-| BigQuery: Set Default Project | Make a project the default target for new queries |
-| BigQuery: Pin / Hide Project | Pin or hide a project in the explorer |
+| BigQuery: Pin Table / Unpin Table | Pin an object to the Pinned folder (`vscode-bigquery.pinned-objects`) |
+| BigQuery: Copy Table Path | Copy `[db].[schema].[name]` to clipboard |
+| BigQuery: Preview (Top 100) | Run `SELECT TOP 100 *` on the object into a grid |
+| BigQuery: Preview Schema | Show `INFORMATION_SCHEMA.COLUMNS` for the object |
+| BigQuery: Open Definition | Open the stored definition of a view / procedure / function |
+| BigQuery: Create Query | Open a new editor with a `SELECT TOP 100 *` starter |
+| BigQuery: Use This Connection | Make a connection the target for `Ctrl+Enter` |
 | **Query History** | |
 | BigQuery: Re-run Query | Execute a query from history |
 | BigQuery: Copy Query | Copy query text to clipboard |
@@ -426,50 +424,25 @@ All commands are available via the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+
 | BigQuery: Download JSONL | Export the active result set as JSONL |
 | BigQuery: Copy to Clipboard | Copy the active result set as Markdown |
 | **Other** | |
-| BigQuery: Troubleshoot | Open troubleshooting guide |
-| BigQuery: Open Settings - Projects | Open project settings |
+| BigQuery: Open Settings - Connections | Jump to `vscode-bigquery.connections` |
 
 ## Settings
 
-### Pin a Project
+### Connections
 
-Pin projects to keep them at the top of the explorer tree.
+Connections are profiles in settings — they sync with Settings Sync like the rest of your configuration:
 
-<img src="https://raw.githubusercontent.com/sseveur/vscode-bigquery/main/documentation/project_set_default.png" alt="set default project" width="600"/>
+```json
+"vscode-bigquery.connections": [
+  { "id": "gold-dev", "server": "xxxx.datawarehouse.fabric.microsoft.com", "database": "Zim_WH_Gold_Dev" },
+  { "id": "azure-sql", "server": "myserver.database.windows.net", "database": "Sales" }
+],
+"vscode-bigquery.activeConnection": "gold-dev"
+```
 
-<img src="https://raw.githubusercontent.com/sseveur/vscode-bigquery/main/documentation/pin_unpin_project.png" alt="pin/unpin project" width="600"/>
+`server` is the SQL connection string host shown in the Fabric item's settings (Warehouse, Lakehouse SQL endpoint or Fabric SQL database), or any Azure SQL / SQL Server host that accepts Entra authentication. `database` is required on Fabric — without it you land in read-only `master`. A Fabric connection lists every warehouse and lakehouse in the workspace under it.
 
-Pinned projects are stored in settings:
-
-<img src="https://raw.githubusercontent.com/sseveur/vscode-bigquery/main/documentation/settings_file.png" alt="settings file" width="600"/>
-
-### Hide a Project
-
-Hide projects from the explorer tree to reduce clutter. Hidden projects can be restored at any time.
-
-To hide a project:
-- Right-click on a project in the explorer and click the "Hide" button (eye-closed icon)
-
-To unhide a project:
-- Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
-- Run `BigQuery: Show Hidden Projects`
-- Select the project to unhide from the list
-
-Alternatively, you can manage hidden projects directly in settings via `vscode-bigquery.hidden-projects`.
-
-### Add GCP Projects
-
-For cases where you only have read permissions at the dataset level (not project level), force a project to be listed:
-
-Setting: `vscode-bigquery.projects`
-
-### Add BigQuery Tables
-
-When permission is granted only at the table level:
-
-Setting: `vscode-bigquery.tables`
-
-<img src="https://raw.githubusercontent.com/sseveur/vscode-bigquery/main/documentation/setting_add_table.png" alt="add table" width="600"/>
+The **ACTIVE** connection is what `Ctrl+Enter` runs against; switch with the plug icon on a connection node or `vscode-bigquery.activeConnection`.
 
 ### Associate .sql Files
 
@@ -499,15 +472,14 @@ Setting: `vscode-bigquery.associateSqlFiles`
 | `vscode-bigquery.formatLogicalOperatorNewline` | string | `before` | AND/OR newline: before, after |
 | `vscode-bigquery.formatLogicalOperatorStyle` | string | `keywordAligned` | AND/OR/ON positioning: keywordAligned, contentAligned, indented |
 | `vscode-bigquery.formatNewlineBeforeSemicolon` | boolean | `false` | Semicolon on separate line |
-| `vscode-bigquery.pinned-projects` | array | `[]` | Pinned GCP project IDs |
-| `vscode-bigquery.pinned-tables` | array | `[]` | Pinned table full names (`project.dataset.table`) |
-| `vscode-bigquery.hidden-projects` | array | `[]` | Hidden GCP project IDs |
-| `vscode-bigquery.projects` | array | `[]` | Additional GCP project IDs to list |
-| `vscode-bigquery.tables` | array | `[]` | Table IDs to list directly |
+| `vscode-bigquery.connections` | array | `[]` | Connection profiles: `{ id, server, database, port }` |
+| `vscode-bigquery.activeConnection` | string | `""` | Connection id `Ctrl+Enter` targets. Empty = first profile |
+| `vscode-bigquery.pinned-objects` | array | `[]` | Pinned tables/views as `<connection id>/database.schema.name` |
+| `vscode-bigquery.maxRows` | number | `100000` | Rows kept per result set for paging; larger results are cut off and flagged |
 | `vscode-bigquery.lineageExportTheme` | string | `dark` | Lineage export theme: dark, light |
 | `vscode-bigquery.autoPreviewCreatedTables` | boolean | `false` | Auto-preview first 100 rows after CREATE TABLE |
 | `vscode-bigquery.defaultLocation` | string | `""` | BQ processing location (US, EU, australia-southeast1, asia-east1, …). Empty = auto-detect from first FROM via `datasets.get`. Set to override for unqualified or CTE-only queries. |
-| `vscode-bigquery.copyTablePathBackticks` | boolean | `true` | Wrap copied table paths in backticks (\`project.dataset.table\`) for direct paste into FROM clauses. Set to `false` for raw `project.dataset.table`. |
+| `vscode-bigquery.copyTablePathBackticks` | boolean | `true` | Copy paths bracket-quoted (`[db].[schema].[name]`). Set to `false` for plain `db.schema.name`. |
 | `vscode-bigquery.gridColors` | object | `{}` | Override per-type cell text colors in the results grid. See [Color Customization](#color-customization) |
 | `vscode-bigquery.authMode` | string | `entra-interactive` | `entra-interactive` (Microsoft account via VS Code) or `azure-cli` (reuse `az login`). |
 | `vscode-bigquery.tenantId` | string | `""` | Entra tenant ID to sign in to. Empty = home tenant. |
