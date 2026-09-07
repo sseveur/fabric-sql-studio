@@ -39,6 +39,19 @@ async function hasAll(conn: ConnectionRef, databases: string[]): Promise<boolean
     }
 }
 
+/** The connection that has `database`: active first, then the only other one that does. */
+export async function connectionForDatabase(database: string): Promise<ConnectionRef | null> {
+    const active = getActiveConnection();
+    if (!active) { return null; }
+    const wanted = [database.toLowerCase()];
+    if (await hasAll(active, wanted)) { return active; }
+    const matches: ConnectionRef[] = [];
+    for (const c of getConnections().filter(c => c.id !== active.id)) {
+        if (await hasAll(c, wanted)) { matches.push(c); }
+    }
+    return matches.length === 1 ? matches[0] : active;
+}
+
 export async function pickConnectionFor(sql: string): Promise<RouteDecision | null> {
     const active = getActiveConnection();
     if (!active) { return null; }

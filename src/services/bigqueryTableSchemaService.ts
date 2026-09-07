@@ -4,6 +4,7 @@ import { BigqueryTableSchema } from "./bigqueryTableSchema";
 import { getActiveConnection } from "./connections";
 import { bracket } from "./objectRef";
 import { clientFor } from "./sqlServerClient";
+import { connectionForDatabase } from "./queryRouter";
 
 /**
  * Column cache for hover / completion, filled from INFORMATION_SCHEMA.COLUMNS over the active
@@ -31,7 +32,8 @@ export class BigqueryTableSchemaService {
         const key = this.key(database, schema, name);
         if (this.loading.has(key) || this.schemas.some(s => this.key(s.project_id, s.dataset_name, s.table_name) === key)) { return false; }
 
-        const conn = getActiveConnection();
+        // The database may live on another connection (Fabric: another workspace) — route like queries do.
+        const conn = await connectionForDatabase(database);
         if (!conn) { return false; }
 
         this.loading.add(key);
