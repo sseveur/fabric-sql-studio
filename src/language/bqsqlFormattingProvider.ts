@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { formatBigQuerySQL } from './bqsqlFormatter';
+import { formatBigQuerySQL, formatErrorSummary } from './bqsqlFormatter';
 
 /**
  * Bridges the existing SQL formatter into VS Code's standard formatting API so
@@ -20,7 +20,7 @@ export class BqsqlFormattingProvider implements vscode.DocumentFormattingEditPro
         try {
             formatted = formatBigQuerySQL(text);
         } catch (error: any) {
-            vscode.window.showErrorMessage(`Failed to format SQL: ${error.message}`);
+            vscode.window.showErrorMessage(formatErrorSummary(error));
             return [];
         }
 

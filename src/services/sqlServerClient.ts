@@ -33,6 +33,7 @@ export class SqlServerClient {
 
     private pool: sql.ConnectionPool | null = null;
     private poolToken: string | null = null;
+    private dbList: Promise<string[]> | null = null;
 
     constructor(public readonly target: SqlConnectionTarget) { }
 
@@ -117,10 +118,21 @@ export class SqlServerClient {
         return ((res.recordset ?? []) as unknown as unknown[][]).map(row => row.map(jsonSafe));
     }
 
+    /** Databases visible on this endpoint (on Fabric: every warehouse / lakehouse in the workspace). Cached per client. */
+    public databases(): Promise<string[]> {
+        if (!this.dbList) {
+            this.dbList = this.query(`SELECT name FROM sys.databases WHERE state = 0 ORDER BY name`)
+                .then(rows => rows.map(r => String(r[0])))
+                .catch(err => { this.dbList = null; throw err; });
+        }
+        return this.dbList;
+    }
+
     public async dispose(): Promise<void> {
         const p = this.pool;
         this.pool = null;
         this.poolToken = null;
+        this.dbList = null;
         if (p) { try { await p.close(); } catch { /* ignore */ } }
     }
 }

@@ -8,6 +8,7 @@ import { Authentication } from './services/authentication';
 import { describeToken, getAccessToken, SCOPE_FABRIC, SCOPE_TDS, signIn, signOut } from './services/auth';
 import { getActiveConnection, getConnection, getConnections, pinObject, setActiveConnection, unpinObject, SETTING_CONNECTIONS } from './services/connections';
 import { listSqlItems, listWorkspaces } from './services/fabricClient';
+import { pickConnectionFor } from './services/queryRouter';
 import { ConnectionRef, ObjectRef, displayName, qualifiedName, refToKey } from './services/objectRef';
 import { SchemaRender } from './tableResultsPanel/schemaRender';
 import { QueryGeneratorService } from './services/queryGeneratorService';
@@ -25,7 +26,7 @@ import { CopyToClipboard } from './tableResultsPanel/copyToClipboard';
 // import { Job } from '@google-cloud/bigquery';
 import { ResultsGridRenderRequestV2, ResultsGridRenderRequestV2Type } from './tableResultsPanel/resultsGridRenderRequestV2';
 import { Dataset, Table } from '@google-cloud/bigquery';
-import { formatBigQuerySQL } from './language/bqsqlFormatter';
+import { formatBigQuerySQL, formatErrorSummary } from './language/bqsqlFormatter';
 import { buildJobDetails } from './services/jobHistoryService';
 import { renderJobDetailsHtml } from './activitybar/jobDetailsPanel';
 import { textToNotebookData } from './notebook/bqSqlNotebookSerializer';
@@ -315,12 +316,12 @@ const runQuery = async function (globalState: vscode.Memento, queryResultsWebvie
 		});
 	}
 
-	const conn = getActiveConnection();
-	if (!conn) {
+	const route = await pickConnectionFor(queryText);
+	if (!route) {
 		warnNoConnection();
 		return 0;
 	}
-	return runSqlQuery(resultsGridRender, conn, queryText, queryStartTime, true, documentUri);
+	return runSqlQuery(resultsGridRender, route.conn, queryText, queryStartTime, true, documentUri, route.routed);
 };
 
 export const commandUserLogin = async function (...args: any[]) {
@@ -659,7 +660,7 @@ function warnNoConnection(): void {
 
 // ---- T-SQL execution (Fabric Warehouse / Lakehouse SQL endpoint, Azure SQL, SQL Server) ----
 
-async function runSqlQuery(resultsGridRender: ResultsGridRender, conn: ConnectionRef, queryText: string, queryStartTime: number, recordHistory = true, documentUri?: vscode.Uri): Promise<number> {
+async function runSqlQuery(resultsGridRender: ResultsGridRender, conn: ConnectionRef, queryText: string, queryStartTime: number, recordHistory = true, documentUri?: vscode.Uri, routed = false): Promise<number> {
 	await resultsGridRender.postMessage({
 		requestType: ResultsGridRenderRequestV2Type.clear.toString(),
 		projectId: null, token: null, job: null, error: null
@@ -675,7 +676,8 @@ async function runSqlQuery(resultsGridRender: ResultsGridRender, conn: Connectio
 		clearSqlDiagnostics(documentUri);
 		if (recordHistory) {
 			const rows = result.sets.reduce((n, s) => n + (s.rowsAffected ?? s.totalRows), 0);
-			showQueryStatus(`$(check) ${rows.toLocaleString()} rows · ${(result.elapsedMs / 1000).toFixed(2)} s`, `${conn.id}\n${result.sets.length} result set(s)`);
+			showQueryStatus(`$(check) ${rows.toLocaleString()} rows · ${(result.elapsedMs / 1000).toFixed(2)} s · ${routed ? 'routed to ' : ''}${conn.id}`,
+				`${result.sets.length} result set(s)${routed ? '\nRouted by the database names in the query; the active connection is unchanged.' : ''}`);
 		}
 
 		if (recordHistory) {
@@ -688,11 +690,11 @@ async function runSqlQuery(resultsGridRender: ResultsGridRender, conn: Connectio
 	} catch (errorx: any) {
 		const message = errorx?.message || 'undefined message';
 		reportSqlError(documentUri, errorx);
-		if (recordHistory) { showQueryStatus(`$(error) SQL error${errorx?.number ? ' ' + errorx.number : ''}`, message); }
+		if (recordHistory) { showQueryStatus(`$(error) SQL error${errorx?.number ? ' ' + errorx.number : ''} · ${conn.id}`, message); }
 		await resultsGridRender.postMessage({
 			requestType: ResultsGridRenderRequestV2Type.error.toString(),
 			projectId: null, token: null, job: null,
-			error: { message, reason: errorx?.number ? `SQL error ${errorx.number}` : '' }
+			error: { message, reason: `${errorx?.number ? `SQL error ${errorx.number} · ` : ''}connection: ${conn.id}` }
 		} as ResultsGridRenderRequestV2);
 		if (recordHistory) {
 			await queryHistoryService?.addEntry({
@@ -743,7 +745,7 @@ export const commandFormatQuery = async function () {
 			editBuilder.replace(fullRange, formatted);
 		});
 	} catch (error: any) {
-		vscode.window.showErrorMessage(`Failed to format SQL: ${error.message}`);
+		vscode.window.showErrorMessage(formatErrorSummary(error));
 	}
 };
 

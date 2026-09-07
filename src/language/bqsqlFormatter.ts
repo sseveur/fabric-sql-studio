@@ -40,6 +40,17 @@ export function getFormatOptions(): FormatOptions {
     };
 }
 
+/** sql-formatter's parse errors dump the whole grammar trace; keep the one useful line. */
+export function formatErrorSummary(error: any): string {
+    const msg = String(error?.message ?? error);
+    const at = /Parse error at token: «?([^»\n]*?)»? at line (\d+) column (\d+)/.exec(msg);
+    if (at) {
+        const what = at[1] === 'EOF' ? 'incomplete SQL' : `unexpected "${at[1]}"`;
+        return `Cannot format: ${what} at line ${at[2]}, column ${at[3]}. Finish the statement and try again.`;
+    }
+    return `Cannot format SQL: ${msg.split('\n')[0]}`;
+}
+
 export function formatBigQuerySQL(sql: string, options?: Partial<FormatOptions>): string {
     const opts = { ...getFormatOptions(), ...options };
 

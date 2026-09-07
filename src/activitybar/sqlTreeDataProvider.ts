@@ -57,8 +57,10 @@ export class SqlTreeDataProvider implements vscode.TreeDataProvider<ObjectTreeIt
     }
 
     private async getDatabases(ref: ObjectRef): Promise<ObjectTreeItem[]> {
-        const rows = await this.query(ref.conn, `SELECT name FROM sys.databases WHERE state = 0 ORDER BY name`);
-        return rows.map(r => new ObjectTreeItem('database', { conn: ref.conn, database: String(r[0]), kind: 'database' }, String(r[0]), '', vscode.TreeItemCollapsibleState.Collapsed));
+        const conn = getConnections().find(c => c.id === ref.conn);
+        if (!conn) { throw new Error(`Unknown connection "${ref.conn}"`); }
+        const names = await clientFor(conn).databases();
+        return names.map(name => new ObjectTreeItem('database', { conn: ref.conn, database: name, kind: 'database' }, name, '', vscode.TreeItemCollapsibleState.Collapsed));
     }
 
     private async getSchemas(ref: ObjectRef): Promise<ObjectTreeItem[]> {
