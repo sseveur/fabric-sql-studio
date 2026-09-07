@@ -1,72 +1,140 @@
-import { JobReference } from './queryResultsMapping';
+import { ConnectionRef } from './objectRef';
 
-/** Normalized view of one server-side job for the Job History tree. */
+/**
+ * Server-side request history, normalised for the Job History tree.
+ *
+ * Fabric Warehouse / SQL analytics endpoint: `queryinsights.exec_requests_history` — every
+ * completed request in the item, 30-day retention, up to ~15 min lag, full text for
+ * Contributor+ roles.
+ * SQL Server / Azure SQL: no history view without Query Store; we show the *live* requests
+ * from `sys.dm_exec_requests` instead (own sessions only unless VIEW SERVER STATE).
+ */
 export interface JobHistoryEntry {
-    jobReference: JobReference;
-    /** load / query / extract / copy — from configuration.jobType. */
-    jobType: string;
-    /** SELECT / INSERT / CREATE_TABLE_AS_SELECT / … (query jobs only). */
-    statementType?: string;
-    state: 'DONE' | 'RUNNING' | 'PENDING' | string;
-    /** Present when the job finished with an error. */
+    /** Connection id + request id; `location` is unused on this backend. */
+    jobReference: { projectId: string; jobId: string; location?: string };
+    jobType: string;                 // 'query' | 'live'
+    statementType?: string;          // SELECT / INSERT / ...
+    state: 'DONE' | 'RUNNING' | 'PENDING' | 'FAILED' | 'CANCELED' | string;
     errorMessage?: string;
     user?: string;
     query?: string;
-    creationTime?: number;   // epoch ms
+    creationTime?: number;           // epoch ms
     durationMs?: number;
-    bytesProcessed?: number;
+    bytesProcessed?: number;         // data scanned, all tiers
     cacheHit?: boolean;
-    /** True when opening a results grid for this job can show rows. */
+    /** Never true on TDS: a finished request's rowset cannot be re-fetched by id. */
     hasResults: boolean;
+    /** Extra columns for the details panel, already display-friendly. */
+    details: Array<[string, string]>;
 }
 
-/**
- * Maps a jobs.list (projection=full) job metadata object into a JobHistoryEntry.
- * Pure — unit tested against live-observed shapes.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function describeJob(metadata: any): JobHistoryEntry {
-    const ref = metadata?.jobReference ?? {};
-    const stats = metadata?.statistics ?? {};
-    const config = metadata?.configuration ?? {};
-    const queryStats = stats.query ?? {};
-    const state = metadata?.status?.state ?? 'UNKNOWN';
-    const errorMessage: string | undefined = metadata?.status?.errorResult?.message;
+export type HistorySource = 'queryinsights' | 'dmv';
 
-    const start = parseInt(stats.startTime ?? stats.creationTime ?? '0', 10);
-    const end = parseInt(stats.endTime ?? '0', 10);
+export function historySourceFor(conn: ConnectionRef): HistorySource {
+    return conn.kind === 'fabric' ? 'queryinsights' : 'dmv';
+}
 
-    const jobType: string = config.jobType?.toLowerCase() ?? 'unknown';
-    const statementType: string | undefined = queryStats.statementType;
+/** Page of completed requests, newest first. */
+export function queryInsightsSql(onlyMine: boolean, offset: number, pageSize: number): string {
+    return `SELECT distributed_statement_id, database_name, submit_time, start_time, end_time, statement_type, total_elapsed_time_ms,
+    login_name, row_count, status, session_id, program_name, label, result_cache_hit, allocated_cpu_time_ms,
+    data_scanned_remote_storage_mb, data_scanned_memory_mb, data_scanned_disk_mb, command, error_code, sql_pool_name
+FROM queryinsights.exec_requests_history
+${onlyMine ? 'WHERE login_name = USER_NAME()\n' : ''}ORDER BY submit_time DESC
+OFFSET ${Math.max(0, offset)} ROWS FETCH NEXT ${Math.max(1, pageSize)} ROWS ONLY`;
+}
 
-    // Results are viewable for finished, error-free query jobs that are not pure DDL/DCL.
-    const ddlLike = !!queryStats.ddlOperationPerformed
-        || (statementType ?? '').startsWith('CREATE_') && !(statementType ?? '').endsWith('AS_SELECT')
-        || (statementType ?? '').startsWith('DROP_')
-        || (statementType ?? '').startsWith('ALTER_');
-    const hasResults = jobType === 'query' && state === 'DONE' && !errorMessage && !ddlLike;
+/** Currently executing requests (no history on plain SQL Server without Query Store). */
+export function liveRequestsSql(onlyMine: boolean): string {
+    return `SELECT r.session_id, r.status, r.command, r.start_time, r.total_elapsed_time, s.login_name, r.row_count, r.cpu_time, r.logical_reads, t.text
+FROM sys.dm_exec_requests r
+JOIN sys.dm_exec_sessions s ON s.session_id = r.session_id
+CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) t
+WHERE r.session_id <> @@SPID AND s.is_user_process = 1${onlyMine ? ' AND s.login_name = SUSER_SNAME()' : ''}
+ORDER BY r.start_time DESC`;
+}
 
+/** Column-name → value map for one positional row. */
+export function rowToRecord(columns: string[], row: unknown[]): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    columns.forEach((c, i) => { out[c] = row[i]; });
+    return out;
+}
+
+const QI_COLUMNS = ['distributed_statement_id', 'database_name', 'submit_time', 'start_time', 'end_time', 'statement_type', 'total_elapsed_time_ms',
+    'login_name', 'row_count', 'status', 'session_id', 'program_name', 'label', 'result_cache_hit', 'allocated_cpu_time_ms',
+    'data_scanned_remote_storage_mb', 'data_scanned_memory_mb', 'data_scanned_disk_mb', 'command', 'error_code', 'sql_pool_name'];
+const DMV_COLUMNS = ['session_id', 'status', 'command', 'start_time', 'total_elapsed_time', 'login_name', 'row_count', 'cpu_time', 'logical_reads', 'text'];
+
+export function describeQueryInsightsRow(connId: string, row: unknown[]): JobHistoryEntry {
+    const r = rowToRecord(QI_COLUMNS, row);
+    const status = String(r.status ?? '').toLowerCase();
+    const state = status === 'succeeded' ? 'DONE' : status === 'failed' ? 'FAILED' : status === 'canceled' ? 'CANCELED' : String(r.status ?? 'UNKNOWN').toUpperCase();
+    const scannedMb = num(r.data_scanned_remote_storage_mb) + num(r.data_scanned_memory_mb) + num(r.data_scanned_disk_mb);
+    const errorCode = num(r.error_code);
     return {
-        jobReference: {
-            projectId: ref.projectId ?? '',
-            jobId: ref.jobId ?? '',
-            location: ref.location,
-        },
-        jobType,
-        statementType,
+        jobReference: { projectId: connId, jobId: String(r.distributed_statement_id ?? '') },
+        jobType: 'query',
+        statementType: str(r.statement_type),
         state,
-        errorMessage,
-        user: metadata?.user_email,
-        query: config.query?.query,
-        creationTime: parseInt(stats.creationTime ?? '0', 10) || undefined,
-        durationMs: start && end ? end - start : undefined,
-        bytesProcessed: parseInt(stats.totalBytesProcessed ?? queryStats.totalBytesProcessed ?? '0', 10) || undefined,
-        cacheHit: queryStats.cacheHit,
-        hasResults,
+        errorMessage: state === 'FAILED' ? `error ${errorCode || ''}`.trim() : undefined,
+        user: str(r.login_name),
+        query: str(r.command),
+        creationTime: ms(r.submit_time ?? r.start_time),
+        durationMs: num(r.total_elapsed_time_ms) || undefined,
+        bytesProcessed: scannedMb > 0 ? Math.round(scannedMb * 1024 * 1024) : undefined,
+        cacheHit: num(r.result_cache_hit) === 2,
+        hasResults: false,
+        details: [
+            ['Statement id', String(r.distributed_statement_id ?? '')],
+            ['Database', str(r.database_name) ?? ''],
+            ['Status', String(r.status ?? '')],
+            ['Submitted', iso(r.submit_time)],
+            ['Started', iso(r.start_time)],
+            ['Ended', iso(r.end_time)],
+            ['Elapsed', `${(num(r.total_elapsed_time_ms) / 1000).toFixed(2)} s`],
+            ['CPU allocated', `${(num(r.allocated_cpu_time_ms) / 1000).toFixed(2)} s`],
+            ['Rows', String(num(r.row_count))],
+            ['Scanned remote (OneLake)', `${num(r.data_scanned_remote_storage_mb).toFixed(1)} MB`],
+            ['Scanned memory', `${num(r.data_scanned_memory_mb).toFixed(1)} MB`],
+            ['Scanned disk', `${num(r.data_scanned_disk_mb).toFixed(1)} MB`],
+            ['Result cache', num(r.result_cache_hit) === 2 ? 'hit' : num(r.result_cache_hit) === 1 ? 'created' : 'n/a'],
+            ['SQL pool', str(r.sql_pool_name) ?? '—'],
+            ['Session', String(r.session_id ?? '')],
+            ['Program', str(r.program_name) ?? '—'],
+            ['Label', str(r.label) ?? '—'],
+            ['Error code', errorCode ? String(errorCode) : '—'],
+        ],
     };
 }
 
-/** One-line label for the tree: query preview, or job type + statement. */
+export function describeLiveRequestRow(connId: string, row: unknown[]): JobHistoryEntry {
+    const r = rowToRecord(DMV_COLUMNS, row);
+    const status = String(r.status ?? '').toLowerCase();
+    return {
+        jobReference: { projectId: connId, jobId: `session ${r.session_id}` },
+        jobType: 'live',
+        statementType: str(r.command),
+        state: status === 'running' ? 'RUNNING' : status === 'suspended' || status === 'runnable' ? 'PENDING' : status.toUpperCase(),
+        user: str(r.login_name),
+        query: str(r.text),
+        creationTime: ms(r.start_time),
+        durationMs: num(r.total_elapsed_time) || undefined,
+        hasResults: false,
+        details: [
+            ['Session', String(r.session_id ?? '')],
+            ['Status', String(r.status ?? '')],
+            ['Command', str(r.command) ?? ''],
+            ['Started', iso(r.start_time)],
+            ['Elapsed', `${(num(r.total_elapsed_time) / 1000).toFixed(2)} s`],
+            ['CPU', `${(num(r.cpu_time) / 1000).toFixed(2)} s`],
+            ['Logical reads', String(num(r.logical_reads))],
+            ['Rows so far', String(num(r.row_count))],
+        ],
+    };
+}
+
+/** One-line label for the tree: query preview, or type + statement. */
 export function jobEntryLabel(e: JobHistoryEntry, maxLen = 60): string {
     if (e.query) {
         const flat = e.query.replace(/\s+/g, ' ').trim();
@@ -75,7 +143,7 @@ export function jobEntryLabel(e: JobHistoryEntry, maxLen = 60): string {
     return [e.jobType, e.statementType].filter(Boolean).join(' · ') || e.jobReference.jobId;
 }
 
-/** Short description: state/type + user + size + duration + age. */
+/** Short description: statement + user + size + duration + age. */
 export function jobEntryDescription(e: JobHistoryEntry, now = Date.now()): string {
     const parts: string[] = [];
     if (e.statementType) { parts.push(e.statementType); }
@@ -96,88 +164,6 @@ export function formatJobBytes(bytes: number): string {
     return `${i === 0 ? value : value.toFixed(1)} ${units[i]}`;
 }
 
-/** Structured execution details for the Job Details panel (from jobs.get metadata). */
-export interface JobDetails {
-    entry: JobHistoryEntry;
-    priority?: string;
-    reservation?: string;
-    totalSlotMs?: number;
-    billingTier?: number;
-    referencedTables: string[];
-    destinationTable?: string;
-    errors: Array<{ message: string; reason?: string; location?: string }>;
-    stages: Array<{
-        name: string;
-        status?: string;
-        recordsRead?: number;
-        recordsWritten?: number;
-        waitMsAvg?: number;
-        readMsAvg?: number;
-        computeMsAvg?: number;
-        writeMsAvg?: number;
-        parallelInputs?: number;
-    }>;
-    /** Timeline samples: elapsed ms → cumulative slot ms. */
-    timeline: Array<{ elapsedMs: number; totalSlotMs: number; activeUnits?: number }>;
-}
-
-/** Extracts execution details from full job metadata (jobs.get). Pure. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function buildJobDetails(metadata: any): JobDetails {
-    const entry = describeJob(metadata);
-    const stats = metadata?.statistics ?? {};
-    const q = stats.query ?? {};
-
-    const tableRef = (t: any): string => // eslint-disable-line @typescript-eslint/no-explicit-any
-        t ? [t.projectId, t.datasetId, t.tableId].filter(Boolean).join('.') : '';
-
-    const errors = (metadata?.status?.errors ?? [])
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .map((e: any) => ({ message: e?.message ?? '', reason: e?.reason, location: e?.location }))
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .filter((e: any) => e.message);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const stages = (q.queryPlan ?? []).map((s: any) => ({
-        name: s?.name ?? '',
-        status: s?.status,
-        recordsRead: num(s?.recordsRead),
-        recordsWritten: num(s?.recordsWritten),
-        waitMsAvg: num(s?.waitMsAvg),
-        readMsAvg: num(s?.readMsAvg),
-        computeMsAvg: num(s?.computeMsAvg),
-        writeMsAvg: num(s?.writeMsAvg),
-        parallelInputs: num(s?.parallelInputs),
-    }));
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const timeline = (q.timeline ?? []).map((t: any) => ({
-        elapsedMs: num(t?.elapsedMs) ?? 0,
-        totalSlotMs: num(t?.totalSlotMs) ?? 0,
-        activeUnits: num(t?.activeUnits),
-    }));
-
-    return {
-        entry,
-        priority: metadata?.configuration?.query?.priority,
-        reservation: stats.reservation_id ?? stats.reservationId,
-        totalSlotMs: num(stats.totalSlotMs ?? q.totalSlotMs),
-        billingTier: num(q.billingTier),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        referencedTables: (q.referencedTables ?? []).map((t: any) => tableRef(t)).filter(Boolean),
-        destinationTable: tableRef(metadata?.configuration?.query?.destinationTable) || undefined,
-        errors,
-        stages,
-        timeline,
-    };
-}
-
-function num(v: unknown): number | undefined {
-    if (v === null || v === undefined) { return undefined; }
-    const n = Number(v);
-    return isFinite(n) ? n : undefined;
-}
-
 export function relativeAge(thenMs: number, now = Date.now()): string {
     const s = Math.max(0, Math.round((now - thenMs) / 1000));
     if (s < 60) { return `${s}s ago`; }
@@ -186,4 +172,22 @@ export function relativeAge(thenMs: number, now = Date.now()): string {
     const h = Math.round(m / 60);
     if (h < 24) { return `${h}h ago`; }
     return `${Math.round(h / 24)}d ago`;
+}
+
+function num(v: unknown): number {
+    if (v === null || v === undefined || v === '') { return 0; }
+    const n = Number(v);
+    return isFinite(n) ? n : 0;
+}
+function str(v: unknown): string | undefined {
+    return v === null || v === undefined ? undefined : String(v);
+}
+function ms(v: unknown): number | undefined {
+    if (!v) { return undefined; }
+    const t = new Date(String(v)).getTime();
+    return isFinite(t) ? t : undefined;
+}
+function iso(v: unknown): string {
+    const t = ms(v);
+    return t ? new Date(t).toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC') : '—';
 }

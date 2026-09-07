@@ -610,9 +610,9 @@
 				"icon": "$(organization)"
 			},
 			{
-				"command": "vscode-bigquery.job-history-open-results",
-				"title": "BigQuery: Open Job Results",
-				"icon": "$(table)"
+				"command": "vscode-bigquery.explain-query",
+				"title": "BigQuery: Show Estimated Plan",
+				"icon": "$(graph)"
 			},
 			{
 				"command": "vscode-bigquery.job-history-details",
@@ -758,6 +758,11 @@
 					"command": "vscode-bigquery.preview-table-at-cursor",
 					"group": "1_modification",
 					"when": "editorLangId == bqsql || editorLangId == sql"
+				},
+				{
+					"command": "vscode-bigquery.explain-query",
+					"group": "1_modification",
+					"when": "editorLangId == bqsql || editorLangId == sql"
 				}
 			],
 			"view/title": [
@@ -809,13 +814,8 @@
 			],
 			"view/item/context": [
 				{
-					"command": "vscode-bigquery.job-history-open-results",
-					"when": "viewItem == 'job-history-job-results'",
-					"group": "inline"
-				},
-				{
 					"command": "vscode-bigquery.job-history-details",
-					"when": "viewItem == 'job-history-job-results' || viewItem == 'job-history-job'",
+					"when": "viewItem == 'job-history-job'",
 					"group": "inline"
 				},
 				{

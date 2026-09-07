@@ -27,8 +27,8 @@ import { CopyToClipboard } from './tableResultsPanel/copyToClipboard';
 import { ResultsGridRenderRequestV2, ResultsGridRenderRequestV2Type } from './tableResultsPanel/resultsGridRenderRequestV2';
 import { Dataset, Table } from '@google-cloud/bigquery';
 import { formatBigQuerySQL, formatErrorSummary } from './language/bqsqlFormatter';
-import { buildJobDetails } from './services/jobHistoryService';
-import { renderJobDetailsHtml } from './activitybar/jobDetailsPanel';
+import { renderRequestDetailsHtml } from './activitybar/jobDetailsPanel';
+import { formatEstimate, parsePlanEstimate } from './services/planEstimate';
 import { textToNotebookData } from './notebook/bqSqlNotebookSerializer';
 import { QueryHistoryItem, QueryHistoryService } from './services/queryHistoryService';
 import { TableIndexService } from './services/tableIndexService';
@@ -65,11 +65,11 @@ export const COMMAND_HISTORY_CLEAR = "vscode-bigquery.history-clear";
 export const COMMAND_HISTORY_SHOW = "vscode-bigquery.history-show";
 export const COMMAND_HISTORY_DELETE = "vscode-bigquery.history-delete";
 export const COMMAND_JOB_HISTORY_SHOW = "vscode-bigquery.job-history-show";
-export const COMMAND_JOB_HISTORY_OPEN_RESULTS = "vscode-bigquery.job-history-open-results";
 export const COMMAND_JOB_HISTORY_REFRESH = "vscode-bigquery.job-history-refresh";
 export const COMMAND_JOB_HISTORY_TOGGLE_ALL_USERS = "vscode-bigquery.job-history-toggle-all-users";
 export const COMMAND_JOB_HISTORY_LOAD_MORE = "vscode-bigquery.job-history-load-more";
 export const COMMAND_JOB_HISTORY_DETAILS = "vscode-bigquery.job-history-details";
+export const COMMAND_EXPLAIN_QUERY = "vscode-bigquery.explain-query";
 export const COMMAND_HISTORY_REFRESH = "vscode-bigquery.history-refresh";
 export const COMMAND_SHOW_LINEAGE = "vscode-bigquery.show-lineage";
 export const COMMAND_SHOW_LINEAGE_SELECTION = "vscode-bigquery.show-lineage-selection";
@@ -842,59 +842,44 @@ export const commandJobHistoryShow = async function (arg: any) {
 	await vscode.window.showTextDocument(doc, { preview: true });
 };
 
-// Server-side Job History: execution details panel (errors, plan stages, timeline, stats).
+// Server-side Job History: request details panel (timings, scanned data, CPU, statement text).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const commandJobHistoryDetails = async function (arg: any) {
-	const ref = arg?.entry?.jobReference;
-	if (!ref?.jobId || !ref?.projectId) { return; }
-	try {
-		const client = new BigQueryClient(ref.projectId);
-		const [metadata] = await client.getJob(ref).getMetadata();
-		const details = buildJobDetails(metadata);
-		const panel = vscode.window.createWebviewPanel(
-			'bigquery-job-details',
-			`Job Details: ${String(ref.jobId).slice(-8)}`,
-			{ viewColumn: vscode.ViewColumn.Two, preserveFocus: true },
-			{ enableFindWidget: true, enableScripts: false }
-		);
-		panel.webview.html = renderJobDetailsHtml(details);
-	} catch (err) {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		vscode.window.showErrorMessage(`Could not load job details: ${(err as any)?.message ?? err}`);
-	}
+	const entry = arg?.entry;
+	if (!entry) { return; }
+	const panel = vscode.window.createWebviewPanel(
+		'bigquery-job-details',
+		`Request: ${String(entry.jobReference.jobId).slice(0, 8)}`,
+		{ viewColumn: vscode.ViewColumn.Two, preserveFocus: true },
+		{ enableFindWidget: true, enableScripts: false }
+	);
+	panel.webview.html = renderRequestDetailsHtml(entry);
 };
 
-// Server-side Job History: open a finished job's result set in the standard grid panel.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const commandJobHistoryOpenResults = async function (arg: any) {
-	const entry = arg?.entry;
-	const ref = entry?.jobReference;
-	if (!ref?.jobId || !ref?.projectId) { return; }
-	try {
-		const client = new BigQueryClient(ref.projectId);
-		const job = client.getJob(ref);
-		const [metadata] = await job.getMetadata();
-		const token = await client.getToken();
+/**
+ * Estimated execution plan for the editor text (SET SHOWPLAN_XML ON): summary in the status bar,
+ * full plan XML in a new editor. Nothing is executed.
+ */
+export const commandExplainQuery = async function () {
+	const editor = vscode.window.activeTextEditor;
+	if (!editor) { return; }
+	const sql = editor.selection.isEmpty ? editor.document.getText() : editor.document.getText(editor.selection);
+	if (!sql.trim()) { return; }
 
-		const shortId = String(ref.jobId).slice(-8);
-		const panel = vscode.window.createWebviewPanel(
-			QUERY_RESULTS_VIEW_TYPE,
-			`Job: ${shortId}`,
-			{ viewColumn: vscode.ViewColumn.Two, preserveFocus: true },
-			{ enableFindWidget: true, enableScripts: true, retainContextWhenHidden: true }
-		);
-		const render = new ResultsGridRender(panel);
-		await render.render1();
-		await render.postMessage({
-			requestType: ResultsGridRenderRequestV2Type.executeQuery.toString(),
-			projectId: ref.projectId,
-			token: token,
-			job: metadata,
-			error: null
-		} as ResultsGridRenderRequestV2);
-	} catch (err) {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		vscode.window.showErrorMessage(`Could not open job results: ${(err as any)?.message ?? err}`);
+	const route = await pickConnectionFor(sql);
+	if (!route) { return warnNoConnection(); }
+
+	try {
+		const xml = await vscode.window.withProgress(
+			{ location: vscode.ProgressLocation.Window, title: `Estimating plan on ${route.conn.id}…` },
+			() => clientFor(route.conn).explain(sql));
+		const estimate = parsePlanEstimate(xml);
+		showQueryStatus(`${formatEstimate(estimate)} · ${route.conn.id}`,
+			[`${estimate.statements} statement(s)`, ...estimate.topOperators.map(o => `  ${o}`), ...(estimate.warnings.length ? ['Warnings: ' + estimate.warnings.join(', ')] : [])].join('\n'));
+		const doc = await vscode.workspace.openTextDocument({ language: 'xml', content: xml });
+		await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: true, preserveFocus: true });
+	} catch (error: any) {
+		vscode.window.showErrorMessage(`Estimated plan failed: ${error?.message ?? error}`);
 	}
 };
 

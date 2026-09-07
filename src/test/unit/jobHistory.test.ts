@@ -1,101 +1,82 @@
 import * as assert from 'assert';
 import {
-    describeJob,
+    describeLiveRequestRow,
+    describeQueryInsightsRow,
     formatJobBytes,
     jobEntryDescription,
     jobEntryLabel,
+    queryInsightsSql,
+    liveRequestsSql,
     relativeAge,
 } from '../../services/jobHistoryService';
 
-/** Minimal jobs.list (projection=full) metadata shape. */
-const meta = (over: Record<string, unknown> = {}) => ({
-    jobReference: { projectId: 'p', jobId: 'job_1', location: 'EU' },
-    configuration: { jobType: 'QUERY', query: { query: 'SELECT 1' } },
-    status: { state: 'DONE' },
-    statistics: {
-        creationTime: '1700000000000',
-        startTime: '1700000000100',
-        endTime: '1700000002100',
-        totalBytesProcessed: '1048576',
-        query: { statementType: 'SELECT', cacheHit: false },
-    },
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    user_email: 'steven@example.com',
-    ...over,
-});
+/** One queryinsights.exec_requests_history row in the SELECT's column order. */
+const qiRow = (over: Partial<Record<string, unknown>> = {}): unknown[] => {
+    const r: Record<string, unknown> = {
+        distributed_statement_id: 'A1B2', database_name: 'Zim_WH_Gold_Dev', submit_time: '2026-09-07T10:00:00.000Z', start_time: '2026-09-07T10:00:00.100Z',
+        end_time: '2026-09-07T10:00:02.100Z', statement_type: 'SELECT', total_elapsed_time_ms: 2000, login_name: 'steven@example.com', row_count: 10,
+        status: 'Succeeded', session_id: 55, program_name: 'vscode', label: null, result_cache_hit: 0, allocated_cpu_time_ms: 350,
+        data_scanned_remote_storage_mb: 0.5, data_scanned_memory_mb: 0.25, data_scanned_disk_mb: 0.25, command: 'SELECT 1', error_code: 0, sql_pool_name: 'default',
+        ...over,
+    };
+    return Object.values(r);
+};
 
-suite('jobHistoryService', () => {
+suite('jobHistoryService (queryinsights)', () => {
 
-    test('maps a finished SELECT job', () => {
-        const e = describeJob(meta());
-        assert.strictEqual(e.jobReference.jobId, 'job_1');
-        assert.strictEqual(e.jobType, 'query');
+    test('maps a succeeded request', () => {
+        const e = describeQueryInsightsRow('gold-dev', qiRow());
+        assert.strictEqual(e.jobReference.projectId, 'gold-dev');
+        assert.strictEqual(e.jobReference.jobId, 'A1B2');
         assert.strictEqual(e.statementType, 'SELECT');
         assert.strictEqual(e.state, 'DONE');
         assert.strictEqual(e.user, 'steven@example.com');
         assert.strictEqual(e.durationMs, 2000);
-        assert.strictEqual(e.bytesProcessed, 1048576);
-        assert.strictEqual(e.hasResults, true);
-    });
-
-    test('errored job → error message, no results', () => {
-        const e = describeJob(meta({ status: { state: 'DONE', errorResult: { message: 'boom' } } }));
-        assert.strictEqual(e.errorMessage, 'boom');
+        assert.strictEqual(e.bytesProcessed, 1048576);       // 1.0 MB scanned across tiers
+        assert.strictEqual(e.cacheHit, false);
         assert.strictEqual(e.hasResults, false);
+        assert.ok(e.details.some(([k, v]) => k === 'CPU allocated' && v === '0.35 s'));
     });
 
-    test('running job → no results yet', () => {
-        const e = describeJob(meta({ status: { state: 'RUNNING' } }));
-        assert.strictEqual(e.hasResults, false);
+    test('failed / canceled / cache-hit states', () => {
+        assert.strictEqual(describeQueryInsightsRow('c', qiRow({ status: 'Failed', error_code: 208 })).state, 'FAILED');
+        assert.strictEqual(describeQueryInsightsRow('c', qiRow({ status: 'Failed', error_code: 208 })).errorMessage, 'error 208');
+        assert.strictEqual(describeQueryInsightsRow('c', qiRow({ status: 'Canceled' })).state, 'CANCELED');
+        const hit = describeQueryInsightsRow('c', qiRow({ result_cache_hit: 2 }));
+        assert.strictEqual(hit.cacheHit, true);
+        assert.ok(jobEntryDescription(hit, Date.parse('2026-09-07T10:01:02Z')).includes('cached'));
     });
 
-    test('DDL job → no results; CTAS keeps results', () => {
-        const ddl = describeJob(meta({
-            statistics: { ...meta().statistics, query: { statementType: 'CREATE_TABLE', ddlOperationPerformed: 'CREATE' } },
-        }));
-        assert.strictEqual(ddl.hasResults, false);
-        const ctas = describeJob(meta({
-            statistics: { ...meta().statistics, query: { statementType: 'CREATE_TABLE_AS_SELECT' } },
-        }));
-        assert.strictEqual(ctas.hasResults, true);
-    });
-
-    test('load job → labeled by type, no results', () => {
-        const e = describeJob(meta({
-            configuration: { jobType: 'LOAD' },
-            statistics: { creationTime: '1700000000000', startTime: '1700000000100', endTime: '1700000002100' },
-        }));
-        assert.strictEqual(e.jobType, 'load');
-        assert.strictEqual(e.hasResults, false);
-        assert.strictEqual(jobEntryLabel(e), 'load');
-    });
-
-    test('label truncates long queries on one line', () => {
-        const e = describeJob(meta({ configuration: { jobType: 'QUERY', query: { query: 'SELECT   a,\n  b ' + 'x'.repeat(100) } } }));
+    test('label truncates long statements on one line; description carries type, user, bytes, duration, age', () => {
+        const e = describeQueryInsightsRow('c', qiRow({ command: 'SELECT   a,\n  b ' + 'x'.repeat(100) }));
         const label = jobEntryLabel(e);
-        assert.ok(label.length <= 60);
-        assert.ok(!label.includes('\n'));
+        assert.ok(label.length <= 60 && !label.includes('\n'));
+        const d = jobEntryDescription(describeQueryInsightsRow('c', qiRow()), Date.parse('2026-09-07T10:01:02Z'));
+        for (const part of ['SELECT', 'steven', '1.0 MB', '2.0s', 'ago']) { assert.ok(d.includes(part), `${part} in ${d}`); }
     });
 
-    test('description carries type, user, bytes, duration, age', () => {
-        const now = 1700000062100; // 60s after end
-        const d = jobEntryDescription(describeJob(meta()), now);
-        assert.ok(d.includes('SELECT'), d);
-        assert.ok(d.includes('steven'), d);
-        assert.ok(d.includes('1.0 MB'), d);
-        assert.ok(d.includes('2.0s'), d);
-        assert.ok(d.includes('ago'), d);
+    test('SQL builders: paging, own-user filter, live requests exclude own session', () => {
+        const page2 = queryInsightsSql(true, 50, 50);
+        assert.ok(page2.includes('WHERE login_name = USER_NAME()'));
+        assert.ok(page2.includes('OFFSET 50 ROWS FETCH NEXT 50 ROWS ONLY'));
+        assert.ok(!queryInsightsSql(false, 0, 50).includes('WHERE'));
+        assert.ok(liveRequestsSql(false).includes('r.session_id <> @@SPID'));
+        assert.ok(liveRequestsSql(true).includes('SUSER_SNAME()'));
     });
+});
 
-    test('cache hit shown instead of bytes', () => {
-        const e = describeJob(meta({
-            statistics: { ...meta().statistics, query: { statementType: 'SELECT', cacheHit: true } },
-        }));
-        const d = jobEntryDescription(e, 1700000062100);
-        assert.ok(d.includes('cached'), d);
-        assert.ok(!d.includes('MB'), d);
+suite('jobHistoryService (live DMV)', () => {
+    test('maps a running request', () => {
+        const e = describeLiveRequestRow('azsql', [61, 'running', 'SELECT', '2026-09-07T10:00:00Z', 1500, 'me', 0, 200, 4000, 'SELECT * FROM t']);
+        assert.strictEqual(e.jobType, 'live');
+        assert.strictEqual(e.state, 'RUNNING');
+        assert.strictEqual(e.jobReference.jobId, 'session 61');
+        assert.strictEqual(e.query, 'SELECT * FROM t');
+        assert.strictEqual(describeLiveRequestRow('a', [1, 'suspended', 'SELECT', null, 0, 'u', 0, 0, 0, '']).state, 'PENDING');
     });
+});
 
+suite('jobHistoryService helpers', () => {
     test('relativeAge buckets', () => {
         const now = 1_000_000_000_000;
         assert.strictEqual(relativeAge(now - 30e3, now), '30s ago');
@@ -108,56 +89,5 @@ suite('jobHistoryService', () => {
         assert.strictEqual(formatJobBytes(0), '0 B');
         assert.strictEqual(formatJobBytes(512), '512 B');
         assert.strictEqual(formatJobBytes(1536), '1.5 KB');
-    });
-});
-
-suite('job details', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { buildJobDetails } = require('../../services/jobHistoryService');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { renderJobDetailsHtml } = require('../../activitybar/jobDetailsPanel');
-
-    const full = meta({
-        statistics: {
-            creationTime: '1700000000000', startTime: '1700000000100', endTime: '1700000002100',
-            totalBytesProcessed: '1048576', totalSlotMs: '4500',
-            query: {
-                statementType: 'SELECT',
-                queryPlan: [
-                    { name: 'S00: Input', status: 'COMPLETE', recordsRead: '1000', recordsWritten: '50', waitMsAvg: '1', readMsAvg: '2', computeMsAvg: '30', writeMsAvg: '4' },
-                ],
-                timeline: [
-                    { elapsedMs: '500', totalSlotMs: '1000' },
-                    { elapsedMs: '1000', totalSlotMs: '4500' },
-                ],
-                referencedTables: [{ projectId: 'p', datasetId: 'd', tableId: 't' }],
-            },
-        },
-        status: { state: 'DONE', errors: [{ message: 'warn <tag>', reason: 'invalid' }] },
-    });
-
-    test('extracts stages, timeline, errors, tables, slot time', () => {
-        const d = buildJobDetails(full);
-        assert.strictEqual(d.stages.length, 1);
-        assert.strictEqual(d.stages[0].computeMsAvg, 30);
-        assert.strictEqual(d.timeline.length, 2);
-        assert.strictEqual(d.totalSlotMs, 4500);
-        assert.deepStrictEqual(d.referencedTables, ['p.d.t']);
-        assert.strictEqual(d.errors.length, 1);
-    });
-
-    test('renders script-free HTML with everything escaped', () => {
-        const html = renderJobDetailsHtml(buildJobDetails(full));
-        assert.ok(!html.includes('<script'), 'no scripts allowed');
-        assert.ok(html.includes("default-src 'none'"), 'CSP present');
-        assert.ok(html.includes('warn &lt;tag&gt;'), 'error message escaped');
-        assert.ok(html.includes('S00: Input'));
-        assert.ok(html.includes('SELECT 1'));
-    });
-
-    test('renders minimal jobs without optional sections', () => {
-        const html = renderJobDetailsHtml(buildJobDetails(meta()));
-        assert.ok(!html.includes('Execution plan'));
-        assert.ok(!html.includes('Errors'));
     });
 });
