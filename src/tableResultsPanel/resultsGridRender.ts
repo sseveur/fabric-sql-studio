@@ -38,9 +38,11 @@ export function sanitizedGridColorVars(): Record<string, string> {
 export class ResultsGridRender {
 
     private webViewPanel: vscode.WebviewPanel;
+    private disposed = false;
 
     constructor(webViewPanel: vscode.WebviewPanel) {
         this.webViewPanel = webViewPanel;
+        webViewPanel.onDidDispose(() => { this.disposed = true; });
     }
 
     public static executeCommand(c: any) {
@@ -141,7 +143,9 @@ export class ResultsGridRender {
         this.webViewPanel.webview.html = this.buildHtml(this.webViewPanel.webview, extensionUri);
     }
 
+    /** Resolves false (instead of throwing) when the user closed the panel before the query returned. */
     public postMessage(message: ResultsGridRenderRequestV2 | SqlResultMessage): Thenable<boolean> {
+        if (this.disposed) { return Promise.resolve(false); }
         return this.webViewPanel.webview.postMessage(message);
     }
 
@@ -152,7 +156,7 @@ export class ResultsGridRender {
         } catch (e: any) {
             reply = { requestType: 'sql_page', requestId: req.requestId, error: String(e?.message ?? e) };
         }
-        this.webViewPanel.webview.postMessage(reply);
+        if (!this.disposed) { this.webViewPanel.webview.postMessage(reply); }
     }
 
     private getUri(webview: vscode.Webview, extensionUri: vscode.Uri, pathList: string[]) {

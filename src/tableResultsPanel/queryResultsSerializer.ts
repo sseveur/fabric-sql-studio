@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { QueryResultsMappingService } from '../services/queryResultsMappingService';
 import { ResultsRender } from '../services/resultsRender';
 import { ResultsGridRender } from './resultsGridRender';
-import { getBigQueryClient } from '../extensionCommands';
 import { ResultsGridRenderRequestV2, ResultsGridRenderRequestV2Type } from './resultsGridRenderRequestV2';
 
 export class QueryResultsSerializer implements vscode.WebviewPanelSerializer {
@@ -40,74 +39,17 @@ export class QueryResultsSerializer implements vscode.WebviewPanelSerializer {
     }
 }
 
-let loadComplete = async function (resultsGridRender: ResultsGridRender, state: any): Promise<void> {
-
-    let _postMessageResult1 = await resultsGridRender.postMessage({
+/**
+ * A restored panel comes back empty: T-SQL results are held in memory for the session and
+ * cannot be re-fetched by id after a restart. The editor mapping is kept so re-running the
+ * query lands in this panel again.
+ */
+let loadComplete = async function (resultsGridRender: ResultsGridRender, _state: any): Promise<void> {
+    await resultsGridRender.postMessage({
         requestType: ResultsGridRenderRequestV2Type.clear.toString(),
         projectId: null,
         token: null,
         job: null,
         error: null
     } as ResultsGridRenderRequestV2);
-
-    const jobId: string | undefined = state.jobId;
-    const projectId: string | undefined = state.projectId;
-    const location: string | undefined = state.location;
-    // const jobIndex: number | undefined = state.jobIndex;
-
-    // const queryResultsMappingItem = QueryResultsMappingService.getQueryResultsMappingItem(this.globalState, uuid);
-
-    if (
-        // queryResultsMappingItem !== undefined
-        jobId !== undefined
-        && projectId !== undefined
-        && location !== undefined
-        //     && queryResultsMappingItem.jobReferences
-        //     && queryResultsMappingItem.jobReferences.length > 0
-        //     && maxResults !== undefined
-        //     && openInTabVisible !== undefined
-        //     && startIndex !== undefined
-        //     && jobIndex !== undefined
-    ) {
-
-        try {
-            const bqClient = await getBigQueryClient();
-
-            const token = await bqClient.getToken();
-
-            const b = bqClient.getJob({
-                jobId: jobId,
-                location: location,
-                projectId: projectId
-            });
-            const job = await b.get();
-            const metadata = job[0].metadata;
-
-            let _postMessageResult2 = await resultsGridRender.postMessage({
-                requestType: ResultsGridRenderRequestV2Type.executeQuery.toString(),
-                projectId: projectId,
-                token: token,
-                job: metadata,
-                error: null
-            } as ResultsGridRenderRequestV2);
-
-        } catch (errorx) {
-            // resultsGridRender.renderException(error);
-            const error =
-            {
-                message: (errorx as any).message || 'undefined message',
-                reason: ''
-            };
-
-            let _postMessageResult3 = await resultsGridRender.postMessage({
-                requestType: ResultsGridRenderRequestV2Type.error.toString(),
-                projectId: null,
-                token: null,
-                job: null,
-                error: error
-            } as ResultsGridRenderRequestV2);
-
-        }
-    }
 };
-
