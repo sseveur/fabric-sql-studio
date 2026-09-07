@@ -424,13 +424,16 @@ All commands are available via the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+
 | BigQuery: Download JSONL | Export the active result set as JSONL |
 | BigQuery: Copy to Clipboard | Copy the active result set as Markdown |
 | **Other** | |
+| BigQuery: Add Fabric Connection | Pick a Fabric workspace and warehouse / lakehouse / SQL database; writes a connection profile |
 | BigQuery: Open Settings - Connections | Jump to `vscode-bigquery.connections` |
 
 ## Settings
 
 ### Connections
 
-Connections are profiles in settings — they sync with Settings Sync like the rest of your configuration:
+The quickest way in: sign in, then click **+** on the Explorer title bar (`BigQuery: Add Fabric Connection`). Pick a workspace, then a warehouse, lakehouse or SQL database — the profile is written to settings and made active.
+
+Profiles live in settings and sync with Settings Sync like the rest of your configuration:
 
 ```json
 "vscode-bigquery.connections": [

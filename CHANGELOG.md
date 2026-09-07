@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Add Fabric Connection** - Pick a workspace, then a warehouse / lakehouse SQL endpoint / SQL database from the Fabric REST API (`Workspace.Read.All`), and a connection profile is written and made active — no more copying hosts from the portal. `+` button on the explorer title bar.
 - **Connection profiles + explorer** - `vscode-bigquery.connections` lists Fabric Warehouse / Lakehouse SQL endpoints, Azure SQL or SQL Server hosts; `vscode-bigquery.activeConnection` (or "Use This Connection" on a tree node) picks the one `Ctrl+Enter` targets. The explorer now shows connection → database → schema → tables / views / routines from the catalog views, with Preview (Top 100), Preview Schema, Create Query, Open Definition, Copy Path (`[db].[schema].[name]`), pin/unpin (`vscode-bigquery.pinned-objects`) and the indexed search. Replaces the GCP project / dataset settings (`projects`, `tables`, `pinned-projects`, `hidden-projects`, `pinned-tables`).
 - **Run queries against Fabric / SQL Server** - `Ctrl+Enter` runs the batch over TDS with your Entra token. Multi-statement batches render one grid per result set; DML statements show their affected-row count. Results are held host-side up to `vscode-bigquery.maxRows` (default 100k) and paged into the grid without any token crossing into the webview.
 

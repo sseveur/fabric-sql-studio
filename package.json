@@ -14,7 +14,7 @@
 		"url": "https://github.com/sseveur/vscode-bigquery/issues"
 	},
 	"engines": {
-		"vscode": "^1.63.0"
+		"vscode": "^1.82.0"
 	},
 	"categories": [
 		"Other"
@@ -545,6 +545,11 @@
 				"title": "BigQuery: Open Settings - Connections"
 			},
 			{
+				"command": "vscode-bigquery.add-fabric-connection",
+				"title": "BigQuery: Add Fabric Connection",
+				"icon": "$(add)"
+			},
+			{
 				"command": "vscode-bigquery.format-query",
 				"title": "BigQuery: Format SQL",
 				"icon": "$(symbol-structure)"
@@ -746,6 +751,11 @@
 					"when": "view == 'bigquery-authentication'"
 				},
 				{
+					"command": "vscode-bigquery.add-fabric-connection",
+					"group": "navigation@1",
+					"when": "view == 'bigquery-tree-data-provider'"
+				},
+				{
 					"command": "vscode-bigquery.explorer-refresh",
 					"group": "navigation",
 					"when": "view == 'bigquery-tree-data-provider'"
@@ -902,7 +912,7 @@
 		"viewsWelcome": [
 			{
 				"view": "bigquery-tree-data-provider",
-				"contents": "No connections configured.\n\n[Add a connection](command:vscode-bigquery.open-settings-connections) (Fabric Warehouse / Lakehouse SQL endpoint, Azure SQL or SQL Server), then sign in from the Authentication view above."
+				"contents": "No connections configured.\n\nSign in from the Authentication view, then\n[Add Fabric Connection](command:vscode-bigquery.add-fabric-connection) to pick a workspace and warehouse / lakehouse,\nor [edit settings](command:vscode-bigquery.open-settings-connections) to add an Azure SQL / SQL Server host."
 			}
 		]
 	},

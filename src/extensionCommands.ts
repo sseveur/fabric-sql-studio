@@ -5,7 +5,8 @@ import { SqlResultMessage } from './tableResultsPanel/resultContract';
 import { sqlTreeDataProvider, QUERY_RESULTS_VIEW_TYPE, TABLE_RESULTS_VIEW_TYPE, authenticationWebviewProvider, bigqueryTableSchemaService } from './extension';
 import { Authentication } from './services/authentication';
 import { describeToken, getAccessToken, SCOPE_FABRIC, SCOPE_TDS, signIn, signOut } from './services/auth';
-import { getActiveConnection, getConnection, pinObject, setActiveConnection, unpinObject, SETTING_CONNECTIONS } from './services/connections';
+import { getActiveConnection, getConnection, getConnections, pinObject, setActiveConnection, unpinObject, SETTING_CONNECTIONS } from './services/connections';
+import { listSqlItems, listWorkspaces } from './services/fabricClient';
 import { ConnectionRef, ObjectRef, displayName, qualifiedName, refToKey } from './services/objectRef';
 import { SchemaRender } from './tableResultsPanel/schemaRender';
 import { QueryGeneratorService } from './services/queryGeneratorService';
@@ -54,6 +55,7 @@ export const COMMAND_DOWNLOAD_CSV = "vscode-bigquery.download-csv";
 export const COMMAND_DOWNLOAD_JSONL = "vscode-bigquery.download-jsonl";
 export const COMMAND_COPY_CLIPBOARD = "vscode-bigquery.copy-to-clipboard";
 export const OPEN_SETTING_CONNECTIONS = "vscode-bigquery.open-settings-connections";
+export const COMMAND_ADD_FABRIC_CONNECTION = "vscode-bigquery.add-fabric-connection";
 export const COMMAND_FORMAT_QUERY = "vscode-bigquery.format-query";
 export const COMMAND_HISTORY_RERUN = "vscode-bigquery.history-rerun";
 export const COMMAND_HISTORY_COPY = "vscode-bigquery.history-copy";
@@ -604,6 +606,49 @@ export const commandCopyToClipboard = async function (this: any, ...args: any[])
 
 export const commandOpenSettingConnections = async function () {
 	vscode.commands.executeCommand('workbench.action.openSettings', SETTING_CONNECTIONS);
+};
+
+export const commandAddFabricConnection = async function () {
+	try {
+		const workspaces = await vscode.window.withProgress(
+			{ location: vscode.ProgressLocation.Notification, title: 'Listing Fabric workspaces…' },
+			() => listWorkspaces());
+		if (workspaces.length === 0) { vscode.window.showInformationMessage('No Fabric workspaces visible to this account.'); return; }
+
+		const ws = await vscode.window.showQuickPick(
+			workspaces.map(w => ({ label: w.displayName, description: w.type === 'Personal' ? 'My workspace' : '', workspace: w })),
+			{ title: 'Add Fabric connection (1/2): workspace', placeHolder: 'Workspace', matchOnDescription: true });
+		if (!ws) { return; }
+
+		const items = await vscode.window.withProgress(
+			{ location: vscode.ProgressLocation.Notification, title: `Listing SQL items in ${ws.label}…` },
+			() => listSqlItems(ws.workspace.id));
+		if (items.length === 0) { vscode.window.showInformationMessage(`No warehouses, lakehouses or SQL databases in ${ws.label}.`); return; }
+
+		const picked = await vscode.window.showQuickPick(
+			items.map(i => ({
+				label: `$(${i.type === 'Warehouse' ? 'database' : i.type === 'Lakehouse' ? 'archive' : 'server'}) ${i.displayName}`,
+				description: i.type,
+				detail: i.unavailableReason ? `Unavailable: ${i.unavailableReason}` : i.server,
+				item: i,
+			})),
+			{ title: 'Add Fabric connection (2/2): warehouse / lakehouse / SQL database', placeHolder: 'Item', matchOnDescription: true });
+		if (!picked) { return; }
+		if (picked.item.unavailableReason) { vscode.window.showWarningMessage(`${picked.item.displayName}: ${picked.item.unavailableReason}`); return; }
+
+		const existing = getConnections();
+		let id = `${ws.label}/${picked.item.displayName}`;
+		if (existing.some(c => c.id === id)) { id = `${id} (${existing.length + 1})`; }
+
+		const raw = vscode.workspace.getConfiguration().get<any[]>(SETTING_CONNECTIONS, []) || [];
+		await vscode.workspace.getConfiguration().update(SETTING_CONNECTIONS,
+			[...raw, { id, server: picked.item.server, database: picked.item.database, kind: 'fabric' }], vscode.ConfigurationTarget.Global);
+		await setActiveConnection(id);
+		vscode.commands.executeCommand(COMMAND_EXPLORER_REFRESH);
+		vscode.window.showInformationMessage(`Connection "${id}" added and made active.`);
+	} catch (error: any) {
+		vscode.window.showErrorMessage(`Add Fabric connection failed: ${error?.message ?? error}`);
+	}
 };
 
 function warnNoConnection(): void {

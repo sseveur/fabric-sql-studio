@@ -204,6 +204,13 @@ export function activate(context: ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
+			commands.COMMAND_ADD_FABRIC_CONNECTION,
+			commands.commandAddFabricConnection
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
 			commands.COMMAND_FORMAT_QUERY,
 			commands.commandFormatQuery
 		)
