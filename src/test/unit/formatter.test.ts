@@ -134,7 +134,7 @@ suite('bqsqlFormatter', () => {
     suite('function-call args in tabular styles', () => {
         const sql = [
             'SELECT ps.profile_id,',
-            "LOGICAL_OR(s.h = 'x' AND (ps.e IS NULL OR ps.e > CURRENT_TIMESTAMP())) AS f,",
+            "MAX(IIF(s.h = 'x' AND (ps.e IS NULL OR ps.e > GETDATE()), 1, 0)) AS f,",
             'STRING_AGG(DISTINCT s.handle ORDER BY s.handle) AS g',
             'FROM t ps GROUP BY ps.profile_id',
         ].join('\n');
@@ -195,12 +195,12 @@ suite('bqsqlFormatter', () => {
         });
     });
 
-    test('tabular: CREATE TEMP TABLE statement head is not split by gutter padding', () => {
+    test('tabular: CREATE TABLE ... AS statement head is not split by gutter padding', () => {
         const out = formatBigQuerySQL(
-            'CREATE TEMP TABLE test AS SELECT 1 AS a',
+            'CREATE TABLE test AS SELECT 1 AS a',
             { ...BASE, indentStyle: 'tabularLeft' }
         );
-        assert.ok(/^CREATE TEMP TABLE test AS$/m.test(out) || /^CREATE TEMP TABLE test AS\b/m.test(out),
+        assert.ok(/^CREATE TABLE test AS$/m.test(out) || /^CREATE TABLE test AS\b/m.test(out),
             `CREATE head split:\n${out}`);
         assert.ok(!/CREATE\s{2,}/.test(out), `CREATE padded:\n${out}`);
     });

@@ -1,5 +1,5 @@
 import { CancellationToken, Hover, HoverProvider, MarkdownString, Position, ProviderResult, TextDocument } from "vscode";
-import { parse } from "@bstruct/bqsql-parser";
+import { parse } from './tsqlParser';
 import { BqsqlDocument, BqsqlDocumentItem } from "./bqsqlDocument";
 import { isBigQueryLanguage } from "../services/languageUtils";
 import { bigqueryTableSchemaService } from "../extension";

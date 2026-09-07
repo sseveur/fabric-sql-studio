@@ -1,149 +1,87 @@
-import { getBigQueryClient } from "../extensionCommands";
 import { BqsqlDocumentItem } from "../language/bqsqlDocument";
-import { Authentication } from "./authentication";
+import { splitChain, textAt } from "../language/tsqlParser";
 import { BigqueryTableSchema } from "./bigqueryTableSchema";
+import { getActiveConnection } from "./connections";
+import { bracket } from "./objectRef";
+import { clientFor } from "./sqlServerClient";
 
+/**
+ * Column cache for hover / completion, filled from INFORMATION_SCHEMA.COLUMNS over the active
+ * connection. Field names keep the BigQuery-era shape (project_id = database, dataset_name =
+ * schema) so the providers that render them need no change; renamed in M9.
+ */
 export class BigqueryTableSchemaService {
 
     private schemas: BigqueryTableSchema[] = [];
-    private defaultProjectId: string | null = null;
+    private loading = new Set<string>();
 
-    /**
-     * Clears all cached table schemas.
-     * Use this when schemas may have changed in BigQuery and you want fresh data.
-     */
     public clearCache(): void {
-        const count = this.getCachedTableCount();
         this.schemas = [];
-        this.defaultProjectId = null;
+        this.loading.clear();
     }
 
-    /**
-     * Returns the number of unique tables currently cached.
-     */
     public getCachedTableCount(): number {
-        const uniqueTables = new Set(
-            this.schemas.map(s => `${s.project_id}.${s.dataset_name}.${s.table_name}`)
-        );
-        return uniqueTables.size;
+        return new Set(this.schemas.map(s => this.key(s.project_id, s.dataset_name, s.table_name))).size;
     }
 
-    public async preLoadSchemaToCache(bqsql: & string, tableIdentifier: BqsqlDocumentItem): Promise<boolean> {
+    public async preLoadSchemaToCache(sql: string, tableIdentifier: BqsqlDocumentItem): Promise<boolean> {
+        const table = this.resolveTableIdentifier(sql, tableIdentifier);
+        if (!table) { return false; }
+        const [database, schema, name] = table;
+        const key = this.key(database, schema, name);
+        if (this.loading.has(key) || this.schemas.some(s => this.key(s.project_id, s.dataset_name, s.table_name) === key)) { return false; }
 
-        if (this.defaultProjectId === null) {
-            this.defaultProjectId = await Authentication.getDefaultProjectId();
-        }
+        const conn = getActiveConnection();
+        if (!conn) { return false; }
 
-        let table = this.resolveTableIdentifier(bqsql, tableIdentifier);
-        if (table !== null) {
-
-            let projectId = table[0];
-            let datasetName = table[1];
-            let tableName = table[2];
-
-            let q = this.schemas.filter(c => c.project_id === projectId && c.dataset_name === datasetName && c.table_name === tableName);
-            if (q.length === 0) {
-                const bqClient = await getBigQueryClient();
-                let tableSchema: BigqueryTableSchema[] = await bqClient.getTableSchema(projectId, datasetName, tableName);
-                // Remove any existing entries for this table before adding (prevents duplicates from race conditions)
-                this.schemas = this.schemas.filter(
-                    c => !(c.project_id === projectId && c.dataset_name === datasetName && c.table_name === tableName)
-                );
-                this.schemas.push(...tableSchema);
-
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    public getSchemaFromCache(bqsql: & string, tableIdentifier: BqsqlDocumentItem): BigqueryTableSchema[] {
-
-        let table = this.resolveTableIdentifier(bqsql, tableIdentifier);
-        if (table !== null) {
-
-            let projectId = table[0];
-            let datasetName = table[1];
-            let tableName = table[2];
-
-            return this.schemas.filter(c => c.project_id === projectId && c.dataset_name === datasetName && c.table_name === tableName);
-        }
-
-        return [];
-    }
-
-    private resolveTableIdentifier(bqsql: & string, tableIdentifier: BqsqlDocumentItem): [project_id: string, dataset_name: string, table_name: string] | null {
-
-        if (tableIdentifier.item_type === "TableIdentifier" && tableIdentifier.items.length > 0) {
-
-            let projectId: string | null = null;
-            let datasetName: string | null = null;
-            let tableName: string | null = null;
-
-            for (let index = 0; index < tableIdentifier.items.length; index++) {
-                const element = tableIdentifier.items[index];
-
-                let text = this.getText(bqsql, element.range);
-
-                if (text !== null) {
-                    if (text.startsWith('`')) { text = text.substring(1); }
-                    if (text.endsWith('`')) { text = text.substring(0, text.length - 1); }
-
-                    if (element.item_type === "TableIdentifierProjectId") {
-                        projectId = text;
-                    }
-
-                    if (element.item_type === "TableIdentifierDatasetIdTableId") {
-                        const split = text.split('.');
-                        datasetName = split[0];
-                        tableName = split[1];
-                        break;
-                    }
-
-                    if (element.item_type === "TableIdentifierProjectIdDatasetId") {
-                        const split = text.split('.');
-                        projectId = split[0];
-                        datasetName = split[1];
-                    }
-
-                    if (element.item_type === "TableIdentifierDatasetId") {
-                        datasetName = text;
-                    }
-                    if (element.item_type === "TableIdentifierTableId") {
-                        tableName = text;
-                    }
-                    if (element.item_type === "TableIdentifierProjectIdDatasetIdTableId") {
-                        const split = text.split('.');
-                        projectId = split[0];
-                        datasetName = split[1];
-                        tableName = split[2];
-                        break;
-                    }
-                }
-            }
-
-            if (projectId === null && datasetName !== null && tableName !== null) {
-                projectId = this.defaultProjectId;
-            }
-
-            if (projectId !== null && datasetName !== null && tableName !== null) {
-                return [projectId, datasetName, tableName];
-            }
-
-        }
-
-        return null;
-    }
-
-    private getText(bqsql: string, range: number[]): string | null {
-
+        this.loading.add(key);
         try {
-            const lines = bqsql.split('\n');
-            return lines[range[0]].substring(range[1], range[2]);
-        } catch (ex) { }
-
-        return null;
+            const rows = await clientFor(conn).query(
+                `SELECT COLUMN_NAME, DATA_TYPE, ORDINAL_POSITION FROM ${bracket(database)}.INFORMATION_SCHEMA.COLUMNS ` +
+                `WHERE TABLE_SCHEMA = N'${lit(schema)}' AND TABLE_NAME = N'${lit(name)}' ORDER BY ORDINAL_POSITION`);
+            const fresh: BigqueryTableSchema[] = rows.map(r => ({
+                project_id: database, dataset_name: schema, table_name: name,
+                column_name: String(r[0]), data_type: String(r[1]), ordinal_position: String(r[2]),
+                is_partitioning_column: 'NO', description: '',
+            }));
+            this.schemas = this.schemas.filter(s => this.key(s.project_id, s.dataset_name, s.table_name) !== key);
+            this.schemas.push(...fresh);
+            return fresh.length > 0;
+        } finally {
+            this.loading.delete(key);
+        }
     }
 
+    public getSchemaFromCache(sql: string, tableIdentifier: BqsqlDocumentItem): BigqueryTableSchema[] {
+        const table = this.resolveTableIdentifier(sql, tableIdentifier);
+        if (!table) { return []; }
+        const key = this.key(...table);
+        return this.schemas.filter(s => this.key(s.project_id, s.dataset_name, s.table_name) === key);
+    }
+
+    /** `t` → [active db, dbo, t]; `s.t` → [active db, s, t]; `d.s.t` (or `srv.d.s.t`) → last three. */
+    private resolveTableIdentifier(sql: string, tableIdentifier: BqsqlDocumentItem): [string, string, string] | null {
+        if (tableIdentifier.item_type !== 'TableIdentifier') { return null; }
+        const chain = tableIdentifier.items.find(c => c.item_type.startsWith('TableIdentifier') && c.item_type !== 'TableIdentifierAlias');
+        if (!chain) { return null; }
+
+        const parts = splitChain(textAt(sql, chain.range)).filter((p, i, arr) => p !== '' || i === arr.length - 2);
+        if (parts.length === 0) { return null; }
+        const name = parts[parts.length - 1];
+        if (!name || /^[@#]/.test(name)) { return null; }
+
+        const conn = getActiveConnection();
+        const database = parts.length >= 3 ? parts[parts.length - 3] : (conn?.database ?? '');
+        const schema = parts.length >= 2 && parts[parts.length - 2] ? parts[parts.length - 2] : 'dbo';
+        if (!database) { return null; }
+        return [database, schema, name];
+    }
+
+    private key(database: string, schema: string, name: string): string {
+        return `${database}.${schema}.${name}`.toLowerCase();
+    }
+}
+
+function lit(s: string): string {
+    return s.replace(/'/g, "''");
 }

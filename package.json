@@ -79,12 +79,26 @@
 						"description": "SQL endpoints to browse and query: Fabric Warehouse / Lakehouse SQL endpoints, Azure SQL, SQL Server. Entra authentication only.",
 						"items": {
 							"type": "object",
-							"required": ["server"],
+							"required": [
+								"server"
+							],
 							"properties": {
-								"id": { "type": "string", "description": "Display name. Defaults to server/database." },
-								"server": { "type": "string", "description": "Host, e.g. xxxx.datawarehouse.fabric.microsoft.com or myserver.database.windows.net" },
-								"database": { "type": "string", "description": "Database / warehouse / lakehouse to connect to. Required on Fabric." },
-								"port": { "type": "number", "default": 1433 }
+								"id": {
+									"type": "string",
+									"description": "Display name. Defaults to server/database."
+								},
+								"server": {
+									"type": "string",
+									"description": "Host, e.g. xxxx.datawarehouse.fabric.microsoft.com or myserver.database.windows.net"
+								},
+								"database": {
+									"type": "string",
+									"description": "Database / warehouse / lakehouse to connect to. Required on Fabric."
+								},
+								"port": {
+									"type": "number",
+									"default": 1433
+								}
 							}
 						},
 						"default": []
@@ -139,7 +153,9 @@
 				"properties": {
 					"vscode-bigquery.pinned-objects": {
 						"type": "array",
-						"items": { "type": "string" },
+						"items": {
+							"type": "string"
+						},
 						"default": [],
 						"scope": "machine-overridable",
 						"title": "Pinned Objects",
@@ -420,7 +436,7 @@
 			{
 				"id": "bqsql",
 				"aliases": [
-					"BigQuery SQL"
+					"T-SQL (Fabric / SQL Server)"
 				],
 				"configuration": "./resources/language/bqsql-language-configuration.json",
 				"extensions": [
@@ -953,7 +969,6 @@
 	},
 	"dependencies": {
 		"@azure/identity": "^4.13.2",
-		"@bstruct/bqsql-parser": "file://.//bqsql_parser/pkg",
 		"@google-cloud/bigquery": "^7.9.3",
 		"@types/gapi.client.bigquery-v2": "^0.0.2",
 		"@vscode/codicons": "^0.0.32",
@@ -962,6 +977,7 @@
 		"jsdom": "^27.4.0",
 		"jspdf": "^2.5.2",
 		"mssql": "^12.7.0",
+		"node-sql-parser": "^5.4.0",
 		"preact": "^10.28.0",
 		"preact-render-to-string": "^6.6.3",
 		"sql-formatter": "^15.6.10",

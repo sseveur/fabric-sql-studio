@@ -14,7 +14,6 @@ import { BqsqlFoldingRangeProvider } from './language/bqsqlFoldingRangeProvider'
 import { BqsqlCtePreviewCodeLensProvider } from './language/bqsqlCtePreviewCodeLensProvider';
 import { BqsqlFormattingProvider } from './language/bqsqlFormattingProvider';
 import { BigqueryTableSchemaService } from './services/bigqueryTableSchemaService';
-// import { BqsqlDiagnostics } from './language/bqsqlDiagnostics';
 import { QueryResultsSerializer } from './tableResultsPanel/queryResultsSerializer';
 import { QueryResultsMappingService } from './services/queryResultsMappingService';
 import { TableResultsSerializer } from './tableResultsPanel/tableResultsSerializer';
@@ -441,11 +440,6 @@ export function activate(context: ExtensionContext) {
 	);
 
 	//language
-	// Diagnostics disabled until M5: the BigQuery WASM parser flags valid T-SQL (TOP, [brackets])
-	// and the dry-run cost check needs a BigQuery project. Re-enabled with the T-SQL parser.
-	// const baseDiagnostics = vscode.languages.createDiagnosticCollection('base_diagnostics');
-	// context.subscriptions.push(baseDiagnostics);
-	// BqsqlDiagnostics.subscribeToDocumentChanges(context, baseDiagnostics);
 
 	// Register language providers for both bqsql and sql languages
 	const completionProvider = new BqsqlCompletionItemProvider();

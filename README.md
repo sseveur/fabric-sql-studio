@@ -18,11 +18,11 @@ A powerful Visual Studio Code extension for Google BigQuery. Browse datasets and
 - **Column Profile** - Right-click a column name to chart its distribution: null %, distinct/duplicate counts, uniqueness, quantile histogram, top values
 - **CTE Preview** - One-click "Preview CTE" CodeLens above each CTE runs it in isolation with its dependencies
 - **Table Preview from SQL** - Right-click a table name (or alias) in the editor to preview its rows
-- **SQL Intellisense** - Autocomplete for SQL keywords, BigQuery functions, and table/CTE columns
-- **Syntax Highlighting** - Full support for `.bqsql` files with grammar injection for `.sql` files
+- **SQL Intellisense** - Autocomplete for T-SQL keywords and functions, plus table / CTE columns after `alias.` (columns come from `INFORMATION_SCHEMA.COLUMNS` on the active connection)
+- **Syntax Highlighting** - T-SQL grammar for `.bqsql` files with grammar injection for `.sql` files; `[bracket]` identifiers, `@variables`, `#temp` tables
 - **SQL Formatting** - Format queries with configurable style options (keyword case, indent style, leading commas, logical-operator style, dense operators, expression width)
 - **Query History** - Track all executed queries with re-run and copy capabilities
-- **Cost Estimation** - Real-time cost estimates based on bytes processed (configurable $/TB)
+- **Run Feedback** - Status bar shows rows / elapsed time after each run; server errors are surfaced as diagnostics on the reported line
 - **Table Schema Hover** - Hover over table names to see schema details (JOINs, CTEs, backtick-quoted)
 - **Data Lineage** - Visualize data flow with CTE support; PNG / PDF export (individual and bulk); dark/light export theme
 - **Export Options** - Download query and preview results as CSV or JSONL, copy to clipboard as Markdown, copy selected rows as TSV/MD
@@ -106,7 +106,7 @@ Query results appear in the bottom panel under `Bigquery: Query results`. You ca
 The extension provides:
 - Syntax highlighting for SQL keywords (SELECT, FROM, WHERE, JOIN, CASE, WHEN, etc.)
 - Block comment support (`/* */`) with syntax highlighting and folding
-- Intellisense/autocomplete for SQL keywords and BigQuery functions
+- Intellisense/autocomplete for T-SQL keywords and functions
 - Configurable completion case (`completionKeywordCase` / `completionFunctionCase`) - insert `select` lowercase instead of `SELECT` to match your writing style
 - Grammar injection for `.sql` files (syntax highlighting works automatically)
 

@@ -1,4 +1,4 @@
-import { parse } from '@bstruct/bqsql-parser';
+import { parse } from './tsqlParser';
 import * as vscode from 'vscode';
 import { FoldingRangeProvider, FoldingRange, TextDocument, CancellationToken, ProviderResult } from 'vscode';
 import { BqsqlDocument, BqsqlDocumentItem } from './bqsqlDocument';
@@ -87,36 +87,19 @@ export class BqsqlFoldingRangeProvider implements FoldingRangeProvider {
      * Start: First line of statement
      * End: Line containing semicolon (or last line of statement range)
      */
-    private createFoldingRangeForStatement(stmt: BqsqlDocumentItem, text: string): FoldingRange | null {
-        if (!stmt.range || stmt.range.length < 3) {
-            return null;
-        }
-
-        const startLine = stmt.range[0];
-        const statementStartOffset = stmt.range[1];
-        const statementEndOffset = stmt.range[2];
-
-        let endLine = stmt.range[0]; // Default to start line
-
-        // Find the semicolon after the statement
-        const remainingText = text.substring(statementEndOffset);
-        const semicolonMatch = remainingText.match(/;/);
-
-        if (semicolonMatch && semicolonMatch.index !== undefined) {
-            // Found semicolon - count lines from statement end to semicolon
-            const semicolonOffset = statementEndOffset + semicolonMatch.index;
-            endLine = this.offsetToLine(text, semicolonOffset);
-        } else {
-            // No semicolon - use statement's last line
-            endLine = this.offsetToLine(text, statementEndOffset);
-        }
-
-        // Only create folding range if there are multiple lines
-        if (endLine > startLine) {
-            return new FoldingRange(startLine, endLine);
-        }
-
-        return null;
+    private createFoldingRangeForStatement(stmt: BqsqlDocumentItem, _text: string): FoldingRange | null {
+        // Statement nodes have no range of their own — fold from the first to the last leaf.
+        let startLine = Number.POSITIVE_INFINITY;
+        let endLine = -1;
+        const walk = (item: BqsqlDocumentItem) => {
+            if (item.range && item.range.length >= 3) {
+                startLine = Math.min(startLine, item.range[0]);
+                endLine = Math.max(endLine, item.range[0]);
+            }
+            for (const child of item.items || []) { walk(child); }
+        };
+        walk(stmt);
+        return endLine > startLine ? new FoldingRange(startLine, endLine) : null;
     }
 
     /**

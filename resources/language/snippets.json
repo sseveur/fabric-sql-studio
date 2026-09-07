@@ -1,2 +1,80 @@
 {
+  "select top": {
+    "prefix": "sel",
+    "body": ["SELECT TOP ${1:100}", "\t*", "FROM ${2:[schema].[table]};"],
+    "description": "SELECT TOP n * FROM"
+  },
+  "select where": {
+    "prefix": "selw",
+    "body": ["SELECT", "\t${1:*}", "FROM ${2:[schema].[table]} AS ${3:t}", "WHERE ${4:condition};"],
+    "description": "SELECT with WHERE"
+  },
+  "cte": {
+    "prefix": "cte",
+    "body": ["WITH ${1:cte} AS (", "\tSELECT", "\t\t${2:*}", "\tFROM ${3:[schema].[table]}", ")", "SELECT", "\t*", "FROM ${1:cte};"],
+    "description": "WITH common table expression"
+  },
+  "insert": {
+    "prefix": "ins",
+    "body": ["INSERT INTO ${1:[schema].[table]} (${2:columns})", "VALUES (${3:values});"],
+    "description": "INSERT INTO ... VALUES"
+  },
+  "insert select": {
+    "prefix": "inssel",
+    "body": ["INSERT INTO ${1:[schema].[table]} (${2:columns})", "SELECT ${3:columns}", "FROM ${4:[schema].[source]};"],
+    "description": "INSERT INTO ... SELECT"
+  },
+  "update": {
+    "prefix": "upd",
+    "body": ["UPDATE ${1:[schema].[table]}", "SET ${2:column} = ${3:value}", "WHERE ${4:condition};"],
+    "description": "UPDATE ... SET ... WHERE"
+  },
+  "delete": {
+    "prefix": "del",
+    "body": ["DELETE FROM ${1:[schema].[table]}", "WHERE ${2:condition};"],
+    "description": "DELETE FROM ... WHERE"
+  },
+  "merge": {
+    "prefix": "merge",
+    "body": [
+      "MERGE INTO ${1:[schema].[target]} AS t",
+      "USING ${2:[schema].[source]} AS s",
+      "\tON t.${3:id} = s.${3:id}",
+      "WHEN MATCHED THEN",
+      "\tUPDATE SET ${4:t.col = s.col}",
+      "WHEN NOT MATCHED BY TARGET THEN",
+      "\tINSERT (${5:columns}) VALUES (${6:values});"
+    ],
+    "description": "MERGE upsert"
+  },
+  "create table as": {
+    "prefix": "ctas",
+    "body": ["CREATE TABLE ${1:[schema].[table]} AS", "SELECT", "\t${2:*}", "FROM ${3:[schema].[source]};"],
+    "description": "CREATE TABLE AS SELECT (Fabric Warehouse)"
+  },
+  "create view": {
+    "prefix": "cview",
+    "body": ["CREATE OR ALTER VIEW ${1:[schema].[view]} AS", "SELECT", "\t${2:*}", "FROM ${3:[schema].[table]};"],
+    "description": "CREATE OR ALTER VIEW"
+  },
+  "declare": {
+    "prefix": "decl",
+    "body": ["DECLARE @${1:name} ${2:INT} = ${3:0};"],
+    "description": "DECLARE variable"
+  },
+  "case": {
+    "prefix": "case",
+    "body": ["CASE", "\tWHEN ${1:condition} THEN ${2:value}", "\tELSE ${3:other}", "END"],
+    "description": "CASE expression"
+  },
+  "row_number": {
+    "prefix": "rownum",
+    "body": ["ROW_NUMBER() OVER (PARTITION BY ${1:column} ORDER BY ${2:column} DESC)"],
+    "description": "ROW_NUMBER window"
+  },
+  "offset fetch": {
+    "prefix": "page",
+    "body": ["ORDER BY ${1:column}", "OFFSET ${2:0} ROWS FETCH NEXT ${3:100} ROWS ONLY"],
+    "description": "Paging with OFFSET / FETCH"
+  }
 }

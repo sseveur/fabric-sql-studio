@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { BigQueryClient } from './services/bigqueryClient';
 import { clientFor, disposeAllClients } from './services/sqlServerClient';
 import { SqlResultMessage } from './tableResultsPanel/resultContract';
+import { clearSqlDiagnostics, reportSqlError, showQueryStatus } from './language/sqlDiagnostics';
 import { sqlTreeDataProvider, QUERY_RESULTS_VIEW_TYPE, TABLE_RESULTS_VIEW_TYPE, authenticationWebviewProvider, bigqueryTableSchemaService } from './extension';
 import { Authentication } from './services/authentication';
 import { describeToken, getAccessToken, SCOPE_FABRIC, SCOPE_TDS, signIn, signOut } from './services/auth';
@@ -269,12 +270,12 @@ const commandQuery = async function (local: any, queryType: RunQueryType) {
 
 	QueryResultsMappingService.upsertQueryResultsMapping(globalState, uuid, textEditor, QueryResultsVisualizationType.table);
 
-	const numberOfJobs = await runQuery(globalState, queryResultsWebviewMapping, uuid, activeTab.label, queryText);
+	const numberOfJobs = await runQuery(globalState, queryResultsWebviewMapping, uuid, activeTab.label, queryText, textEditor.document.uri);
 
 
 };
 
-const runQuery = async function (globalState: vscode.Memento, queryResultsWebviewMapping: Map<string, ResultsRender>, uuid: string, mainLabel: string, queryText: string): Promise<number> {
+const runQuery = async function (globalState: vscode.Memento, queryResultsWebviewMapping: Map<string, ResultsRender>, uuid: string, mainLabel: string, queryText: string, documentUri?: vscode.Uri): Promise<number> {
 
 	const queryStartTime = Date.now();
 
@@ -319,7 +320,7 @@ const runQuery = async function (globalState: vscode.Memento, queryResultsWebvie
 		warnNoConnection();
 		return 0;
 	}
-	return runSqlQuery(resultsGridRender, conn, queryText, queryStartTime);
+	return runSqlQuery(resultsGridRender, conn, queryText, queryStartTime, true, documentUri);
 };
 
 export const commandUserLogin = async function (...args: any[]) {
@@ -658,7 +659,7 @@ function warnNoConnection(): void {
 
 // ---- T-SQL execution (Fabric Warehouse / Lakehouse SQL endpoint, Azure SQL, SQL Server) ----
 
-async function runSqlQuery(resultsGridRender: ResultsGridRender, conn: ConnectionRef, queryText: string, queryStartTime: number, recordHistory = true): Promise<number> {
+async function runSqlQuery(resultsGridRender: ResultsGridRender, conn: ConnectionRef, queryText: string, queryStartTime: number, recordHistory = true, documentUri?: vscode.Uri): Promise<number> {
 	await resultsGridRender.postMessage({
 		requestType: ResultsGridRenderRequestV2Type.clear.toString(),
 		projectId: null, token: null, job: null, error: null
@@ -671,6 +672,12 @@ async function runSqlQuery(resultsGridRender: ResultsGridRender, conn: Connectio
 		const msg: SqlResultMessage = { requestType: 'sql_result', resultId: result.id, sets: result.sets, elapsedMs: result.elapsedMs };
 		await resultsGridRender.postMessage(msg);
 
+		clearSqlDiagnostics(documentUri);
+		if (recordHistory) {
+			const rows = result.sets.reduce((n, s) => n + (s.rowsAffected ?? s.totalRows), 0);
+			showQueryStatus(`$(check) ${rows.toLocaleString()} rows · ${(result.elapsedMs / 1000).toFixed(2)} s`, `${conn.id}\n${result.sets.length} result set(s)`);
+		}
+
 		if (recordHistory) {
 			await queryHistoryService?.addEntry({
 				query: queryText, timestamp: queryStartTime, bytesProcessed: 0,
@@ -680,6 +687,8 @@ async function runSqlQuery(resultsGridRender: ResultsGridRender, conn: Connectio
 		return result.sets.length;
 	} catch (errorx: any) {
 		const message = errorx?.message || 'undefined message';
+		reportSqlError(documentUri, errorx);
+		if (recordHistory) { showQueryStatus(`$(error) SQL error${errorx?.number ? ' ' + errorx.number : ''}`, message); }
 		await resultsGridRender.postMessage({
 			requestType: ResultsGridRenderRequestV2Type.error.toString(),
 			projectId: null, token: null, job: null,

@@ -44,7 +44,7 @@ export function formatBigQuerySQL(sql: string, options?: Partial<FormatOptions>)
     const opts = { ...getFormatOptions(), ...options };
 
     let formatted = format(sql, {
-        language: 'bigquery',
+        language: 'transactsql',
         tabWidth: opts.tabWidth,
         useTabs: opts.useTabs,
         keywordCase: opts.keywordCase,

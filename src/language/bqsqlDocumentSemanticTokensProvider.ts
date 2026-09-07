@@ -1,4 +1,4 @@
-import { parse } from "@bstruct/bqsql-parser";
+import { parse } from './tsqlParser';
 import { CancellationToken, DocumentSemanticTokensProvider, Event, Position, Range, ProviderResult, SemanticTokens, SemanticTokensBuilder, TextDocument, SemanticTokensLegend } from "vscode";
 import { bigqueryTableSchemaService } from "../extension";
 import { BqsqlDocument, BqsqlDocumentItem } from "./bqsqlDocument";

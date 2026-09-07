@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **T-SQL language services** - Completion (T-SQL functions and keywords, `alias.` / `[db].[schema].[table].` column lists from `INFORMATION_SCHEMA.COLUMNS`), hover schema, semantic tokens, folding and the CTE Preview CodeLens now run on a T-SQL tokenizer; the formatter uses `sql-formatter`'s `transactsql` dialect; syntax highlighting, snippets and bracket pairs are T-SQL. Server errors from a run are shown as diagnostics on the reported line, and the status bar shows rows / elapsed time after each run.
 - **Add Fabric Connection** - Pick a workspace, then a warehouse / lakehouse SQL endpoint / SQL database from the Fabric REST API (`Workspace.Read.All`), and a connection profile is written and made active — no more copying hosts from the portal. `+` button on the explorer title bar.
 - **Connection profiles + explorer** - `vscode-bigquery.connections` lists Fabric Warehouse / Lakehouse SQL endpoints, Azure SQL or SQL Server hosts; `vscode-bigquery.activeConnection` (or "Use This Connection" on a tree node) picks the one `Ctrl+Enter` targets. The explorer now shows connection → database → schema → tables / views / routines from the catalog views, with Preview (Top 100), Preview Schema, Create Query, Open Definition, Copy Path (`[db].[schema].[name]`), pin/unpin (`vscode-bigquery.pinned-objects`) and the indexed search. Replaces the GCP project / dataset settings (`projects`, `tables`, `pinned-projects`, `hidden-projects`, `pinned-tables`).
 - **Run queries against Fabric / SQL Server** - `Ctrl+Enter` runs the batch over TDS with your Entra token. Multi-statement batches render one grid per result set; DML statements show their affected-row count. Results are held host-side up to `vscode-bigquery.maxRows` (default 100k) and paged into the grid without any token crossing into the webview.
@@ -19,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **BigQuery WASM parser** - The Rust `bqsql_parser` crate, its wasm-pack build step and the `@bstruct/bqsql-parser` dependency are gone; there is no native toolchain in the build any more. Dry-run byte / cost estimation is gone with it (no equivalent in T-SQL; a query-plan estimate comes in a later milestone).
 - **gcloud-based auth** - User Login with Google Drive, User Login via Console, Service Account Login, Initialize gcloud, Activate/Remove User, and the Troubleshoot page.
 
 - **Pub/Sub export** - The "Send to Pub/Sub" command, grid button and `@google-cloud/pubsub` dependency are gone; there is no equivalent on the Fabric / SQL Server targets this branch is moving to.

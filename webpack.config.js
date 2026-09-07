@@ -2,7 +2,6 @@
 
 'use strict';
 
-const { copyFileSync, mkdirSync, existsSync } = require('fs');
 const path = require('path');
 const webpack = require('webpack');
 
@@ -38,30 +37,11 @@ const extensionConfig = {
         ]
       },
       {
-        exclude: [
-          path.resolve(__dirname, '.github'),
-          path.resolve(__dirname, 'bqsql_parser'),
-        ]
+        exclude: [path.resolve(__dirname, '.github')]
       }
     ]
   },
   devtool: 'nosources-source-map',
-  plugins: [
-    (a, b) => {
-      const distDir = path.join(__dirname, 'dist');
-      if (!existsSync(distDir)) {
-        mkdirSync(distDir, { recursive: true });
-      }
-      copyFileSync(
-        require('path').join(__dirname, 'bqsql_parser', 'pkg', 'bqsql_parser_bg.wasm'),
-        require('path').join(__dirname, 'dist', 'bqsql_parser_bg.wasm')
-      );
-      copyFileSync(
-        require('path').join(__dirname, 'bqsql_parser', 'pkg', 'bqsql_parser.js'),
-        require('path').join(__dirname, 'dist', 'bqsql_parser.js')
-      );
-    },
-  ],
   infrastructureLogging: {
     level: "log",
   },

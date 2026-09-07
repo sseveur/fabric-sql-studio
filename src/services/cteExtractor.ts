@@ -1,4 +1,4 @@
-import { parse } from "@bstruct/bqsql-parser";
+import { parse } from '../language/tsqlParser';
 import { parse as parseCst, cstVisitor } from "sql-parser-cst";
 import { BqsqlDocument, BqsqlDocumentItem } from "../language/bqsqlDocument";
 import { extractTableReferences, extractCtesWithDependencies } from "./sqlTableExtractor";
@@ -15,7 +15,7 @@ export interface CteDefinition {
 
 /**
  * Extract all CTE definitions from SQL query
- * Uses sql-parser-cst for better JOIN/table extraction, with @bstruct/bqsql-parser as fallback
+ * Uses sql-parser-cst for better JOIN/table extraction, with the T-SQL parser as fallback
  */
 export function extractCtes(sql: string): CteDefinition[] {
     // Try sql-parser-cst first (better table extraction for JOINs etc)
@@ -30,7 +30,7 @@ export function extractCtes(sql: string): CteDefinition[] {
         }));
     }
 
-    // Fallback to @bstruct/bqsql-parser for cases sql-parser-cst doesn't support
+    // Fallback to the T-SQL parser for cases sql-parser-cst doesn't support
     // (e.g., CREATE VIEW after WITH)
     const parsed = parse(sql) as BqsqlDocument;
     const ctes: CteDefinition[] = [];
@@ -192,7 +192,7 @@ function extractSqlForQueryItem(queryItem: BqsqlDocumentItem, sql: string): stri
 
 /**
  * Extract table and CTE references from a query item
- * Uses sql-parser-cst for better extraction, with fallback to @bstruct/bqsql-parser
+ * Uses sql-parser-cst for better extraction, with fallback to the T-SQL parser
  */
 function extractDependencies(
     queryItem: BqsqlDocumentItem,
@@ -207,7 +207,7 @@ function extractDependencies(
 
     if (cteSql) {
         // Try to use sql-parser-cst to extract tables from just the CTE body
-        // This handles JOINs and other cases @bstruct misses
+        // This handles JOINs and other cases the tokenizer misses
         const allTables = extractTableReferences(cteSql);
 
         for (const tableRef of allTables) {
@@ -224,7 +224,7 @@ function extractDependencies(
         }
     }
 
-    // Also use the original @bstruct approach for any tables it might find
+    // Also use the tokenizer approach for any tables it might find
     for (const item of queryItem.items || []) {
         if (item.item_type === "TableIdentifier") {
             const tableName = extractTableNameFromIdentifier(item, sql);
