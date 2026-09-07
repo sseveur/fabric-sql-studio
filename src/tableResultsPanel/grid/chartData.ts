@@ -18,8 +18,9 @@ export interface ChartSeries {
     skipped: number;
 }
 
-const NUMERIC_TYPES = new Set(['INT64', 'INTEGER', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC']);
-const TEMPORAL_TYPES = new Set(['TIMESTAMP', 'DATE', 'DATETIME']);
+const NUMERIC_TYPES = new Set(['INT64', 'INTEGER', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC',
+    'INT', 'BIGINT', 'SMALLINT', 'TINYINT', 'DECIMAL', 'REAL', 'MONEY', 'SMALLMONEY']);
+const TEMPORAL_TYPES = new Set(['TIMESTAMP', 'DATE', 'DATETIME', 'DATETIME2', 'SMALLDATETIME', 'DATETIMEOFFSET']);
 
 export function isNumericType(type: string | undefined): boolean {
     return NUMERIC_TYPES.has((type || '').toUpperCase());

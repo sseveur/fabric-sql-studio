@@ -15,6 +15,8 @@ interface Props {
     title?: string;
     dmlStats?: DmlStats;
     statementType?: string;
+    /** T-SQL statements report only an affected-row count, not insert/update/delete splits. */
+    rowsAffected?: number;
     /** Handler for the export buttons (CSV/JSONL/Copy-all). Defaults to posting through
      *  the webview API (results panel). Notebook hosts pass their own handler that routes over
      *  renderer messaging instead — acquireVsCodeApi doesn't exist there. Pass null to hide the
@@ -26,7 +28,9 @@ type SortItem = { colKey: string; dir: 1 | -1 };
 type Density = 'compact' | 'cozy' | 'comfy';
 type Tab = 'results' | 'schema' | 'chart';
 
-const NUMERIC_TYPES = new Set(['INT64', 'INTEGER', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC']);
+const NUMERIC_TYPES = new Set(['INT64', 'INTEGER', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC',
+    // T-SQL
+    'INT', 'BIGINT', 'SMALLINT', 'TINYINT', 'DECIMAL', 'REAL', 'MONEY', 'SMALLMONEY']);
 function isNumericType(t: string): boolean {
     return NUMERIC_TYPES.has(t.toUpperCase());
 }
@@ -117,7 +121,7 @@ function tryParseJson(s: string): any {
     return undefined;
 }
 
-export function BqTable({ fetchRows, exportRef, schema, totalRows, initialRows, title, dmlStats, statementType, onExport = postExport }: Props) {
+export function BqTable({ fetchRows, exportRef, schema, totalRows, initialRows, title, dmlStats, statementType, rowsAffected, onExport = postExport }: Props) {
     const columns = useMemo<FlatColumn[]>(() => flattenSchema(schema), [schema]);
     const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
     const [pageIndex, setPageIndex] = useState<number>(0);
@@ -325,6 +329,7 @@ export function BqTable({ fetchRows, exportRef, schema, totalRows, initialRows, 
     if (dmlStats?.insertedRowCount && dmlStats.insertedRowCount !== '0') { dmlParts.push(`${Number(dmlStats.insertedRowCount).toLocaleString()} inserted`); }
     if (dmlStats?.updatedRowCount && dmlStats.updatedRowCount !== '0') { dmlParts.push(`${Number(dmlStats.updatedRowCount).toLocaleString()} updated`); }
     if (dmlStats?.deletedRowCount && dmlStats.deletedRowCount !== '0') { dmlParts.push(`${Number(dmlStats.deletedRowCount).toLocaleString()} deleted`); }
+    if (rowsAffected !== undefined) { dmlParts.push(`${rowsAffected.toLocaleString()} rows affected`); }
     const showDml = dmlParts.length > 0 || (statementType && ['INSERT', 'UPDATE', 'DELETE', 'MERGE'].includes(statementType));
 
     // A DML result with no rows to page through IS the banner — an empty table with a schema

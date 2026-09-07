@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import { BigQueryClient } from './services/bigqueryClient';
+import { SqlConnectionTarget, SqlServerClient } from './services/sqlServerClient';
+import { SqlResultMessage } from './tableResultsPanel/resultContract';
 import { bigQueryTreeDataProvider, QUERY_RESULTS_VIEW_TYPE, TABLE_RESULTS_VIEW_TYPE, authenticationWebviewProvider, bigqueryTableSchemaService } from './extension';
 import { Authentication } from './services/authentication';
 import { describeToken, getAccessToken, SCOPE_FABRIC, SCOPE_TDS, signIn, signOut } from './services/auth';
@@ -324,6 +326,13 @@ const runQuery = async function (globalState: vscode.Memento, queryResultsWebvie
 		panel.onDidDispose(e => {
 			QueryResultsMappingService.deleteQueryResultsMapping(globalState, uuid);
 		});
+	}
+
+	// Fabric / SQL Server path (port M2). Active whenever a connection is configured; the
+	// BigQuery path below is retired in M3.
+	const sqlTarget = getSqlTarget();
+	if (sqlTarget) {
+		return runSqlQuery(resultsGridRender, sqlTarget, queryText, queryStartTime);
 	}
 
 	try {
@@ -993,6 +1002,60 @@ export const commandOpenSettingTables = async function (this: any, ...args: any[
 };
 
 
+// ---- T-SQL execution (Fabric Warehouse / Lakehouse SQL endpoint, Azure SQL, SQL Server) ----
+
+function getSqlTarget(): SqlConnectionTarget | null {
+	const cfg = vscode.workspace.getConfiguration('vscode-bigquery').get<{ server?: string; database?: string; port?: number }>('connection');
+	const server = cfg?.server?.trim();
+	if (!server) { return null; }
+	return { server, database: cfg?.database?.trim() ?? '', port: cfg?.port };
+}
+
+let sqlClient: SqlServerClient | null = null;
+
+async function getSqlClient(target: SqlConnectionTarget): Promise<SqlServerClient> {
+	if (sqlClient && (sqlClient.target.server !== target.server || sqlClient.target.database !== target.database)) {
+		await sqlClient.dispose();
+		sqlClient = null;
+	}
+	if (!sqlClient) { sqlClient = new SqlServerClient(target); }
+	return sqlClient;
+}
+
+async function runSqlQuery(resultsGridRender: ResultsGridRender, target: SqlConnectionTarget, queryText: string, queryStartTime: number): Promise<number> {
+	await resultsGridRender.postMessage({
+		requestType: ResultsGridRenderRequestV2Type.clear.toString(),
+		projectId: null, token: null, job: null, error: null
+	} as ResultsGridRenderRequestV2);
+
+	try {
+		const client = await getSqlClient(target);
+		const maxRows = vscode.workspace.getConfiguration('vscode-bigquery').get<number>('maxRows', 100000);
+		const result = await client.runQuery(queryText, maxRows);
+
+		const msg: SqlResultMessage = { requestType: 'sql_result', resultId: result.id, sets: result.sets, elapsedMs: result.elapsedMs };
+		await resultsGridRender.postMessage(msg);
+
+		await queryHistoryService?.addEntry({
+			query: queryText, timestamp: queryStartTime, bytesProcessed: 0,
+			durationMs: Date.now() - queryStartTime, projectId: `${target.server}/${target.database}`, status: 'success'
+		});
+		return result.sets.length;
+	} catch (errorx: any) {
+		const message = errorx?.message || 'undefined message';
+		await resultsGridRender.postMessage({
+			requestType: ResultsGridRenderRequestV2Type.error.toString(),
+			projectId: null, token: null, job: null,
+			error: { message, reason: errorx?.number ? `SQL error ${errorx.number}` : '' }
+		} as ResultsGridRenderRequestV2);
+		await queryHistoryService?.addEntry({
+			query: queryText, timestamp: queryStartTime, bytesProcessed: 0,
+			durationMs: Date.now() - queryStartTime, projectId: `${target.server}/${target.database}`, status: 'error', errorMessage: message
+		});
+		return 0;
+	}
+}
+
 
 let bigQueryClient: BigQueryClient | null;
 
@@ -1007,6 +1070,8 @@ export const getBigQueryClient = async function (): Promise<BigQueryClient> {
 };
 
 const resetBigQueryClient = function () {
+	sqlClient?.dispose();
+	sqlClient = null;
 	bigQueryClient = null;
 };
 

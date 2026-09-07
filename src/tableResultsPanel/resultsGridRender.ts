@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { getExtensionUri } from '../extension';
 import { COMMAND_DOWNLOAD_CSV, COMMAND_DOWNLOAD_JSONL, COMMAND_COPY_CLIPBOARD } from '../extensionCommands';
 import { ResultsGridRenderRequestV2 } from './resultsGridRenderRequestV2';
+import { SqlPageRequest, SqlPageResponse, SqlResultMessage } from './resultContract';
+import { getResultPage } from '../services/sqlServerClient';
 
 const GRID_COLOR_KEY_TO_VAR: Record<string, string> = {
     number: '--bq-color-number',
@@ -113,6 +115,8 @@ export class ResultsGridRender {
                 if ((c as any).command === 'load_complete') {
                     clearTimeout(timer);
                     resolve(true);
+                } else if ((c as any).command === 'fetch_page') {
+                    this.answerPage(c as SqlPageRequest);
                 } else {
                     ResultsGridRender.executeCommand(c);
                 }
@@ -127,7 +131,9 @@ export class ResultsGridRender {
         const extensionUri = getExtensionUri();
 
         this.webViewPanel.webview.onDidReceiveMessage(c => {
-            if ((c as any).command !== 'load_complete') {
+            if ((c as any).command === 'fetch_page') {
+                this.answerPage(c as SqlPageRequest);
+            } else if ((c as any).command !== 'load_complete') {
                 ResultsGridRender.executeCommand(c);
             }
         });
@@ -135,8 +141,18 @@ export class ResultsGridRender {
         this.webViewPanel.webview.html = this.buildHtml(this.webViewPanel.webview, extensionUri);
     }
 
-    public postMessage(message: ResultsGridRenderRequestV2): Thenable<boolean> {
+    public postMessage(message: ResultsGridRenderRequestV2 | SqlResultMessage): Thenable<boolean> {
         return this.webViewPanel.webview.postMessage(message);
+    }
+
+    private answerPage(req: SqlPageRequest): void {
+        let reply: SqlPageResponse;
+        try {
+            reply = { requestType: 'sql_page', requestId: req.requestId, rows: getResultPage(req.resultId, req.setIndex, req.startIndex, req.pageSize) };
+        } catch (e: any) {
+            reply = { requestType: 'sql_page', requestId: req.requestId, error: String(e?.message ?? e) };
+        }
+        this.webViewPanel.webview.postMessage(reply);
     }
 
     private getUri(webview: vscode.Webview, extensionUri: vscode.Uri, pathList: string[]) {

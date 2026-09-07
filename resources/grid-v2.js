@@ -68,6 +68,12 @@ function GridApp() {
                 return;
             }
             switch (msg.requestType) {
+                case 'sql_page':
+                    (0,_pagination__WEBPACK_IMPORTED_MODULE_3__.handleSqlPageMessage)(msg);
+                    break;
+                case 'sql_result':
+                    setView(viewFromSqlResult(msg));
+                    break;
                 case 'clear':
                     setView({ kind: 'idle' });
                     break;
@@ -118,12 +124,16 @@ function GridApp() {
 function BqTableHost({ view }) {
     const { source, token } = view;
     const fetchRows = (0,preact_hooks__WEBPACK_IMPORTED_MODULE_1__.useCallback)((start, size) => {
+        if (source.kind === 'sql') {
+            return (0,_pagination__WEBPACK_IMPORTED_MODULE_3__.requestSqlPage)(source.resultId, source.setIndex, start, size)
+                .then(rows => ({ rows: rows.map(_pagination__WEBPACK_IMPORTED_MODULE_3__.toWireRow), totalRows: String(view.totalRows) }));
+        }
         if (source.kind === 'job') {
             return (0,_pagination__WEBPACK_IMPORTED_MODULE_3__.fetchPage)(source.jobRef, token, start, size);
         }
         return (0,_pagination__WEBPACK_IMPORTED_MODULE_3__.fetchTablePage)(source.tableRef, token, start, size);
-    }, [source, token]);
-    return ((0,preact_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_BqTable__WEBPACK_IMPORTED_MODULE_2__.BqTable, { fetchRows: fetchRows, exportRef: view.exportRef, schema: view.schema, totalRows: view.totalRows, initialRows: view.initialRows, title: view.title, dmlStats: view.dmlStats, statementType: view.statementType }));
+    }, [source, token, view.totalRows]);
+    return ((0,preact_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_BqTable__WEBPACK_IMPORTED_MODULE_2__.BqTable, { fetchRows: fetchRows, exportRef: view.exportRef, schema: view.schema, totalRows: view.totalRows, initialRows: view.initialRows, title: view.title, dmlStats: view.dmlStats, statementType: view.statementType, rowsAffected: view.rowsAffected, onExport: source.kind === 'sql' ? null : undefined }));
 }
 function jobRefFromJob(job, fallbackProjectId) {
     const ref = job.jobReference || job.metadata?.jobReference || {};
@@ -223,6 +233,27 @@ async function handlePreviewTable(msg) {
             }],
     };
 }
+function viewFromSqlResult(msg) {
+    if (!msg.sets.length) {
+        return { kind: 'error', message: 'The batch returned no result sets.', reason: null };
+    }
+    const many = msg.sets.length > 1;
+    const tables = msg.sets.map(set => ({
+        key: `sql-${msg.resultId}-${set.index}`,
+        exportRef: {},
+        schema: set.columns.map((c) => ({ name: c.name, type: c.type, mode: c.nullable ? 'NULLABLE' : 'REQUIRED' })),
+        totalRows: set.rows.length,
+        initialRows: set.rows.map(_pagination__WEBPACK_IMPORTED_MODULE_3__.toWireRow),
+        token: '',
+        source: { kind: 'sql', resultId: msg.resultId, setIndex: set.index },
+        title: many || set.truncated
+            ? `${many ? `Statement ${set.index + 1}` : 'Result'}${set.truncated ? ` · showing first ${set.rows.length.toLocaleString()} of ${set.totalRows.toLocaleString()}+ rows` : ''}`
+            : undefined,
+        rowsAffected: set.rowsAffected,
+        statementType: set.rowsAffected !== undefined ? 'DML' : undefined,
+    }));
+    return { kind: 'tables', tables };
+}
 
 
 /***/ }),
@@ -267,7 +298,9 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
-const NUMERIC_TYPES = new Set(['INT64', 'INTEGER', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC']);
+const NUMERIC_TYPES = new Set(['INT64', 'INTEGER', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC',
+    // T-SQL
+    'INT', 'BIGINT', 'SMALLINT', 'TINYINT', 'DECIMAL', 'REAL', 'MONEY', 'SMALLMONEY']);
 function isNumericType(t) {
     return NUMERIC_TYPES.has(t.toUpperCase());
 }
@@ -386,7 +419,7 @@ function tryParseJson(s) {
     catch { /* ignore */ }
     return undefined;
 }
-function BqTable({ fetchRows, exportRef, schema, totalRows, initialRows, title, dmlStats, statementType, onExport = postExport }) {
+function BqTable({ fetchRows, exportRef, schema, totalRows, initialRows, title, dmlStats, statementType, rowsAffected, onExport = postExport }) {
     const columns = (0,preact_hooks__WEBPACK_IMPORTED_MODULE_1__.useMemo)(() => (0,_cellFormatters__WEBPACK_IMPORTED_MODULE_2__.flattenSchema)(schema), [schema]);
     const [pageSize, setPageSize] = (0,preact_hooks__WEBPACK_IMPORTED_MODULE_1__.useState)(_pagination__WEBPACK_IMPORTED_MODULE_3__.DEFAULT_PAGE_SIZE);
     const [pageIndex, setPageIndex] = (0,preact_hooks__WEBPACK_IMPORTED_MODULE_1__.useState)(0);
@@ -623,6 +656,9 @@ function BqTable({ fetchRows, exportRef, schema, totalRows, initialRows, title, 
     }
     if (dmlStats?.deletedRowCount && dmlStats.deletedRowCount !== '0') {
         dmlParts.push(`${Number(dmlStats.deletedRowCount).toLocaleString()} deleted`);
+    }
+    if (rowsAffected !== undefined) {
+        dmlParts.push(`${rowsAffected.toLocaleString()} rows affected`);
     }
     const showDml = dmlParts.length > 0 || (statementType && ['INSERT', 'UPDATE', 'DELETE', 'MERGE'].includes(statementType));
     // A DML result with no rows to page through IS the banner — an empty table with a schema
@@ -928,7 +964,10 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   fetchChildJobs: () => (/* binding */ fetchChildJobs),
 /* harmony export */   fetchPage: () => (/* binding */ fetchPage),
 /* harmony export */   fetchTableMetadata: () => (/* binding */ fetchTableMetadata),
-/* harmony export */   fetchTablePage: () => (/* binding */ fetchTablePage)
+/* harmony export */   fetchTablePage: () => (/* binding */ fetchTablePage),
+/* harmony export */   handleSqlPageMessage: () => (/* binding */ handleSqlPageMessage),
+/* harmony export */   requestSqlPage: () => (/* binding */ requestSqlPage),
+/* harmony export */   toWireRow: () => (/* binding */ toWireRow)
 /* harmony export */ });
 const PAGE_SIZE = 50;
 const BQ_BASE = 'https://bigquery.googleapis.com/bigquery/v2';
@@ -992,6 +1031,40 @@ async function fetchChildJobs(parent, token) {
     }));
 }
 const DEFAULT_PAGE_SIZE = PAGE_SIZE;
+const pending = new Map();
+let nextRequestId = 1;
+/** Ask the extension host for a window of an in-memory result set. */
+function requestSqlPage(resultId, setIndex, startIndex, pageSize) {
+    const api = window.__bqVscode;
+    if (!api) {
+        return Promise.reject(new Error('No host channel'));
+    }
+    const requestId = nextRequestId++;
+    const msg = { command: 'fetch_page', requestId, resultId, setIndex, startIndex, pageSize };
+    return new Promise((resolve, reject) => {
+        pending.set(requestId, { resolve, reject });
+        api.postMessage(msg);
+    });
+}
+/** Route a `sql_page` reply from the host back to its awaiting request. */
+function handleSqlPageMessage(msg) {
+    const p = pending.get(msg.requestId);
+    if (!p) {
+        return;
+    }
+    pending.delete(msg.requestId);
+    if (msg.error) {
+        p.reject(new Error(msg.error));
+    }
+    else {
+        p.resolve(msg.rows || []);
+    }
+}
+/** Positional row -> the { f: [{ v }] } shape the grid already renders. ponytail: adapter until
+ *  BqTable goes positional once the BigQuery paths are deleted. */
+function toWireRow(row) {
+    return { f: row.map(v => ({ v })) };
+}
 
 
 /***/ }),
@@ -1212,8 +1285,9 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ });
 /* harmony import */ var _cellFormatters__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(6);
 
-const NUMERIC_TYPES = new Set(['INT64', 'INTEGER', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC']);
-const TEMPORAL_TYPES = new Set(['TIMESTAMP', 'DATE', 'DATETIME']);
+const NUMERIC_TYPES = new Set(['INT64', 'INTEGER', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC',
+    'INT', 'BIGINT', 'SMALLINT', 'TINYINT', 'DECIMAL', 'REAL', 'MONEY', 'SMALLMONEY']);
+const TEMPORAL_TYPES = new Set(['TIMESTAMP', 'DATE', 'DATETIME', 'DATETIME2', 'SMALLDATETIME', 'DATETIMEOFFSET']);
 function isNumericType(type) {
     return NUMERIC_TYPES.has((type || '').toUpperCase());
 }

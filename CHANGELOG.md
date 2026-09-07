@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - Fabric / SQL Server port
 
+### Added
+
+- **Run queries against Fabric / SQL Server** - Set `vscode-bigquery.connection` (`server`, `database`) to a Fabric Warehouse / Lakehouse SQL endpoint, Azure SQL or SQL Server host and `Ctrl+Enter` runs the batch over TDS with your Entra token. Multi-statement batches render one grid per result set; DML statements show their affected-row count. Results are held host-side up to `vscode-bigquery.maxRows` (default 100k) and paged into the grid without any token crossing into the webview.
+
 ### Changed
 
 - **Authentication is now Entra ID** - Sign in with a Microsoft account through VS Code's built-in Accounts menu, or reuse an `az login` session (`vscode-bigquery.authMode`, `vscode-bigquery.tenantId`). New `BigQuery: Show Auth Token Info` command prints audience / tenant / expiry for the SQL and Fabric scopes. The gcloud CLI is no longer required and `gcloudPath` is gone.

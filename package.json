@@ -49,8 +49,14 @@
 					},
 					"vscode-bigquery.authMode": {
 						"type": "string",
-						"enum": ["entra-interactive", "azure-cli"],
-						"enumDescriptions": ["Sign in with a Microsoft account through the VS Code Accounts menu.", "Reuse the token from an existing az login session (Azure CLI must be installed)."],
+						"enum": [
+							"entra-interactive",
+							"azure-cli"
+						],
+						"enumDescriptions": [
+							"Sign in with a Microsoft account through the VS Code Accounts menu.",
+							"Reuse the token from an existing az login session (Azure CLI must be installed)."
+						],
 						"default": "entra-interactive",
 						"scope": "machine-overridable",
 						"order": 3,
@@ -64,6 +70,28 @@
 						"order": 4,
 						"title": "Entra Tenant ID",
 						"description": "Tenant (directory) ID to sign in to. Leave empty for your home tenant."
+					},
+					"vscode-bigquery.connection": {
+						"type": "object",
+						"scope": "machine-overridable",
+						"order": 5,
+						"title": "Connection",
+						"description": "SQL endpoint to run queries against (Fabric Warehouse / Lakehouse SQL endpoint, Azure SQL, SQL Server). Entra authentication only.",
+						"properties": {
+							"server": { "type": "string", "description": "Host name, e.g. xxxx.datawarehouse.fabric.microsoft.com or myserver.database.windows.net" },
+							"database": { "type": "string", "description": "Database / warehouse / lakehouse name. Required on Fabric." },
+							"port": { "type": "number", "default": 1433 }
+						},
+						"default": {}
+					},
+					"vscode-bigquery.maxRows": {
+						"type": "number",
+						"default": 100000,
+						"minimum": 1000,
+						"scope": "machine-overridable",
+						"order": 6,
+						"title": "Max Rows",
+						"description": "Rows kept per result set for paging in the grid. Larger results are cut off and flagged."
 					},
 					"vscode-bigquery.defaultLocation": {
 						"type": "string",
@@ -939,6 +967,7 @@
 		"@types/glob": "^7.2.0",
 		"@types/jsdom": "^27.0.0",
 		"@types/mocha": "^9.1.1",
+		"@types/mssql": "^12.3.0",
 		"@types/node": "16.x",
 		"@types/uuid": "^9.0.0",
 		"@types/vscode": "^1.63.0",
@@ -965,6 +994,7 @@
 		"csv-writer": "^1.6.0",
 		"jsdom": "^27.4.0",
 		"jspdf": "^2.5.2",
+		"mssql": "^12.7.0",
 		"preact": "^10.28.0",
 		"preact-render-to-string": "^6.6.3",
 		"sql-formatter": "^15.6.10",

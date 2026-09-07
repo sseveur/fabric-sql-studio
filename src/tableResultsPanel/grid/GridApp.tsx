@@ -6,6 +6,9 @@ import {
     fetchPage,
     fetchTableMetadata,
     fetchTablePage,
+    handleSqlPageMessage,
+    requestSqlPage,
+    toWireRow,
 } from './pagination';
 import type {
     BqField,
@@ -15,6 +18,7 @@ import type {
     JobReference,
     TableReference,
 } from './types';
+import type { SqlResultMessage, SqlPageResponse } from '../resultContract';
 
 interface TableView {
     key: string;
@@ -23,10 +27,11 @@ interface TableView {
     totalRows: number;
     initialRows: any[];
     token: string;
-    source: { kind: 'job'; jobRef: JobReference } | { kind: 'table'; tableRef: TableReference };
+    source: { kind: 'job'; jobRef: JobReference } | { kind: 'table'; tableRef: TableReference } | { kind: 'sql'; resultId: string; setIndex: number };
     title?: string;
     dmlStats?: DmlStats;
     statementType?: string;
+    rowsAffected?: number;
 }
 
 type View =
@@ -43,6 +48,12 @@ export function GridApp() {
             const msg = ev.data as GridMessage;
             if (!msg || !msg.requestType) { return; }
             switch (msg.requestType) {
+                case 'sql_page':
+                    handleSqlPageMessage(msg as unknown as SqlPageResponse);
+                    break;
+                case 'sql_result':
+                    setView(viewFromSqlResult(msg as unknown as SqlResultMessage));
+                    break;
                 case 'clear':
                     setView({ kind: 'idle' });
                     break;
@@ -105,11 +116,15 @@ export function GridApp() {
 function BqTableHost({ view }: { view: TableView }) {
     const { source, token } = view;
     const fetchRows: PageFetcher = useCallback((start, size) => {
+        if (source.kind === 'sql') {
+            return requestSqlPage(source.resultId, source.setIndex, start, size)
+                .then(rows => ({ rows: rows.map(toWireRow), totalRows: String(view.totalRows) }));
+        }
         if (source.kind === 'job') {
             return fetchPage(source.jobRef, token, start, size);
         }
         return fetchTablePage(source.tableRef, token, start, size);
-    }, [source, token]);
+    }, [source, token, view.totalRows]);
 
     return (
         <BqTable
@@ -121,6 +136,8 @@ function BqTableHost({ view }: { view: TableView }) {
             title={view.title}
             dmlStats={view.dmlStats}
             statementType={view.statementType}
+            rowsAffected={view.rowsAffected}
+            onExport={source.kind === 'sql' ? null : undefined}
         />
     );
 }
@@ -227,4 +244,26 @@ async function handlePreviewTable(msg: GridMessage): Promise<View> {
             title: `${projectId}.${datasetId}.${tableId}`,
         }],
     };
+}
+
+function viewFromSqlResult(msg: SqlResultMessage): View {
+    if (!msg.sets.length) {
+        return { kind: 'error', message: 'The batch returned no result sets.', reason: null };
+    }
+    const many = msg.sets.length > 1;
+    const tables: TableView[] = msg.sets.map(set => ({
+        key: `sql-${msg.resultId}-${set.index}`,
+        exportRef: {},
+        schema: set.columns.map((c): BqField => ({ name: c.name, type: c.type, mode: c.nullable ? 'NULLABLE' : 'REQUIRED' })),
+        totalRows: set.rows.length,
+        initialRows: set.rows.map(toWireRow),
+        token: '',
+        source: { kind: 'sql', resultId: msg.resultId, setIndex: set.index },
+        title: many || set.truncated
+            ? `${many ? `Statement ${set.index + 1}` : 'Result'}${set.truncated ? ` · showing first ${set.rows.length.toLocaleString()} of ${set.totalRows.toLocaleString()}+ rows` : ''}`
+            : undefined,
+        rowsAffected: set.rowsAffected,
+        statementType: set.rowsAffected !== undefined ? 'DML' : undefined,
+    }));
+    return { kind: 'tables', tables };
 }
