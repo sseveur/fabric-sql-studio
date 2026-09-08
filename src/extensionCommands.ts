@@ -8,7 +8,7 @@ import { Authentication } from './services/authentication';
 import { describeToken, getAccessToken, SCOPE_FABRIC, SCOPE_TDS, signIn, signOut } from './services/auth';
 import { getActiveConnection, getConnection, getConnections, pinObject, setActiveConnection, unpinObject, SETTING_CONNECTIONS } from './services/connections';
 import { listSqlItems, listWorkspaces } from './services/fabricClient';
-import { pickConnectionFor } from './services/queryRouter';
+import { connectionForDatabase, pickConnectionFor } from './services/queryRouter';
 import { ConnectionRef, ObjectRef, displayName, qualifiedName, refToKey } from './services/objectRef';
 import { SchemaRender } from './tableResultsPanel/schemaRender';
 import { QueryGeneratorService } from './services/queryGeneratorService';
@@ -164,12 +164,12 @@ export const commandProfileColumn = async function (this: any, ...args: any[]) {
 	const sql = document.getText();
 	const offset = document.offsetAt(textEditor.selection.active);
 
-	const bqClient = await getBigQueryClient();
-	const defaultProjectId = await bqClient.getProjectId();
+	const conn = getActiveConnection();
+	if (!conn) { return warnNoConnection(); }
 
 	let resolved: ResolvedColumn | null = null;
 	try {
-		resolved = await resolveColumnAtPosition(bqClient, sql, offset, defaultProjectId);
+		resolved = await resolveColumnAtPosition(sql, offset, conn.database);
 	} catch (err) {
 		vscode.window.showErrorMessage(`Profile column: ${(err as Error).message || err}`);
 		return;
@@ -181,7 +181,9 @@ export const commandProfileColumn = async function (this: any, ...args: any[]) {
 	}
 
 	const target = resolved;
-	const subtitle = `${target.projectId}.${target.datasetId}.${target.tableId}.${target.columnName} · ${target.columnType}`;
+	const subtitle = `${target.database}.${target.schema}.${target.table}.${target.columnName} · ${target.columnType}`;
+	// ponytail: the profile SQL itself is still BigQuery-flavoured until M8 rewrites columnProfile.ts.
+	const bqClient = await getBigQueryClient();
 
 	await vscode.window.withProgress(
 		{ location: vscode.ProgressLocation.Notification, title: `Profiling \`${target.columnName}\`…`, cancellable: false },
@@ -189,7 +191,7 @@ export const commandProfileColumn = async function (this: any, ...args: any[]) {
 			try {
 				const profile = await runColumnProfileForTable(
 					bqClient,
-					{ projectId: target.projectId, datasetId: target.datasetId, tableId: target.tableId },
+					{ projectId: target.database, datasetId: target.schema, tableId: target.table },
 					target.columnName,
 					target.columnType
 				);
@@ -222,21 +224,15 @@ export const commandPreviewTableAtCursor = async function (...args: any[]) {
 	const sql = document.getText();
 	const offset = document.offsetAt(textEditor.selection.active);
 
-	let resolved = null;
-	try {
-		resolved = await resolveTableAtPosition(sql, offset, conn.database);
-	} catch (err) {
-		vscode.window.showErrorMessage(`Preview table: ${(err as Error).message || err}`);
-		return;
-	}
-
+	const resolved = resolveTableAtPosition(sql, offset, conn.database);
 	if (!resolved) {
 		vscode.window.showWarningMessage('Place the cursor on a table name (or its alias) before running Preview Table.');
 		return;
 	}
 
-	// The resolver still speaks project.dataset.table; for T-SQL that is database.schema.name.
-	const ref: ObjectRef = { conn: conn.id, database: resolved.projectId || conn.database, schema: resolved.datasetId, name: resolved.tableId, kind: 'table' };
+	// The database may belong to another profile (Fabric: another workspace) — route like queries do.
+	const owner = (await connectionForDatabase(resolved.database)) ?? conn;
+	const ref: ObjectRef = { conn: owner.id, database: resolved.database, schema: resolved.schema, name: resolved.table, kind: 'table' };
 	await commandViewTable({ ref });
 };
 

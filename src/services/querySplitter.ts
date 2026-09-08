@@ -1,86 +1,38 @@
-import { parse } from "sql-parser-cst";
+import { isKw, lineOffsets, splitStatements, tokenize } from '../language/tsqlParser';
 
 export interface SplitQuery {
     sql: string;
+    /** Absolute offsets of the statement text, excluding its terminating `;`. */
     startOffset: number;
     endOffset: number;
+    /** 1-based. */
     startLine: number;
     endLine: number;
 }
 
 /**
- * Pre-process SQL to remove syntax that sql-parser-cst doesn't support
- * This allows the parser to work, while we extract from the original SQL
- * IMPORTANT: Replace with spaces to maintain offset alignment
- */
-function preprocessForParser(sql: string): string {
-    // Replace "NULLS LAST" and "NULLS FIRST" with spaces to maintain offsets
-    // Pattern: match DESC/ASC followed by NULLS LAST/FIRST
-    const nullsPattern = /\b(DESC|ASC)(\s+NULLS\s+(?:LAST|FIRST))\b/gi;
-    return sql.replace(nullsPattern, (match, direction, nullsPart) => {
-        // Keep DESC/ASC, replace "NULLS LAST/FIRST" with spaces
-        return direction + ' '.repeat(nullsPart.length);
-    });
-}
-
-/**
- * Split SQL text into individual queries using sql-parser-cst
- * Properly handles semicolons in strings and comments
+ * Splits a script into statements using the T-SQL tokenizer (semicolons inside strings and
+ * comments are ignored; `GO` separators are dropped). Comments are not part of a statement's
+ * range — the notebook serializer re-attaches them from the gaps.
  */
 export function splitQueries(fullSql: string): SplitQuery[] {
-    try {
-        // Pre-process SQL to handle unsupported syntax (NULLS LAST/FIRST)
-        const processedSql = preprocessForParser(fullSql);
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const cst: any = parse(processedSql, { dialect: "bigquery", includeRange: true });
-
-        if (cst.type !== 'program' || !cst.statements) {
-            return [singleQuery(fullSql)];
-        }
-
-        const queries: SplitQuery[] = [];
-        for (const stmt of cst.statements) {
-            if (!stmt.range) { continue; }
-            const [startOffset, endOffset] = stmt.range;
-            // IMPORTANT: Extract from ORIGINAL SQL to preserve all syntax
-            const sql = fullSql.substring(startOffset, endOffset).trim();
-            if (!sql) { continue; }
-
-            queries.push({
-                sql,
-                startOffset,
-                endOffset,
-                startLine: offsetToLine(fullSql, startOffset),
-                endLine: offsetToLine(fullSql, endOffset)
-            });
-        }
-        return queries.length > 0 ? queries : [singleQuery(fullSql)];
-    } catch (error) {
-        // Log parse errors for debugging
-        console.warn('[Lineage] Query splitting failed:', error instanceof Error ? error.message : String(error));
-        return [singleQuery(fullSql)];
+    const offs = lineOffsets(fullSql);
+    const out: SplitQuery[] = [];
+    for (const stmt of splitStatements(tokenize(fullSql))) {
+        const code = stmt.filter(t => t.kind !== 'comment');
+        if (code.length && code[code.length - 1].kind === 'punct' && code[code.length - 1].text === ';') { code.pop(); }
+        if (!code.length || (code.length === 1 && isKw(code[0], 'GO'))) { continue; }
+        const first = code[0];
+        const last = code[code.length - 1];
+        const startOffset = offs[first.line] + first.start;
+        const endOffset = offs[last.line] + last.end;
+        const sql = fullSql.substring(startOffset, endOffset).trim();
+        if (!sql) { continue; }
+        out.push({ sql, startOffset, endOffset, startLine: first.line + 1, endLine: last.line + 1 });
     }
+    return out.length ? out : [singleQuery(fullSql)];
 }
 
 function singleQuery(sql: string): SplitQuery {
-    return {
-        sql: sql.trim(),
-        startOffset: 0,
-        endOffset: sql.length,
-        startLine: 1,
-        endLine: countLines(sql)
-    };
-}
-
-function offsetToLine(source: string, offset: number): number {
-    let line = 1;
-    for (let i = 0; i < offset && i < source.length; i++) {
-        if (source[i] === '\n') { line++; }
-    }
-    return line;
-}
-
-function countLines(source: string): number {
-    return (source.match(/\n/g) || []).length + 1;
+    return { sql: sql.trim(), startOffset: 0, endOffset: sql.length, startLine: 1, endLine: (sql.match(/\n/g) || []).length + 1 };
 }

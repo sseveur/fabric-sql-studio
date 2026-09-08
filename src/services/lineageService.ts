@@ -1,14 +1,16 @@
-import { extractTableReferences, TableReference } from "./sqlTableExtractor";
+import { collectTableIdentifiers, parse, textAt, unquotePart } from '../language/tsqlParser';
+import { extractTableReferences, normalizeTableName, tableRefOf } from './sqlTableExtractor';
 
 export interface LineageTable {
-    fullName: string;           // project.dataset.table or dataset.table or table
-    projectId?: string;
-    datasetId?: string;
-    tableId: string;
+    /** Normalised `database.schema.table`, `schema.table` or `table`. */
+    fullName: string;
+    database?: string;
+    schema?: string;
+    table: string;
     role: 'source' | 'target';
-    statementType?: string;     // INSERT, CREATE, MERGE, UPDATE, DELETE
-    line?: number;              // Source line number for navigation
-    column?: number;            // Source column number for navigation
+    statementType?: string;     // INSERT, CREATE TABLE, MERGE, UPDATE, DELETE, ...
+    line?: number;              // 1-based, for navigation
+    column?: number;
 }
 
 export interface LineageData {
@@ -18,55 +20,22 @@ export interface LineageData {
 }
 
 export function extractLineage(sql: string): LineageData {
-    const sources: LineageTable[] = [];
     const targets: LineageTable[] = [];
-    const seenSources = new Set<string>();  // Track by table name only (deduplicate physical tables)
     const seenTargets = new Set<string>();
-
-    // Extract source tables using sql-parser-cst (handles JOINs, comma-separated, etc.)
-    const tableRefs = extractTableReferences(sql);
-    for (const tableRef of tableRefs) {
-        if (tableRef.name) {
-            // Deduplicate by table name only (ignore aliases - one node per physical table)
-            const uniqueKey = tableRef.name.toLowerCase();
-            if (!seenSources.has(uniqueKey)) {
-                seenSources.add(uniqueKey);
-                const table = parseTableName(tableRef.name, 'source');
-                table.line = tableRef.line;
-                table.column = tableRef.column;
-                sources.push(table);
-            }
-        }
+    for (const m of extractTargetTables(sql)) {
+        const key = m.tableName.toLowerCase();
+        if (seenTargets.has(key)) { continue; }
+        seenTargets.add(key);
+        targets.push({ ...parseTableName(m.tableName, 'target'), statementType: m.statementType, line: m.line, column: m.column });
     }
 
-    // Extract target tables using regex patterns
-    const targetMatches = extractTargetTables(sql);
-    for (const match of targetMatches) {
-        const normalizedName = match.tableName.toLowerCase();
-        if (!seenTargets.has(normalizedName)) {
-            seenTargets.add(normalizedName);
-            const table = parseTableName(match.tableName, 'target');
-            table.statementType = match.statementType;
-            table.line = match.line;
-            table.column = match.column;
-            targets.push(table);
-        }
-    }
+    // A target that also appears in FROM (MERGE / UPDATE ... FROM self) stays a target only.
+    const sources = extractTableReferences(sql)
+        .filter(ref => !seenTargets.has(ref.name.toLowerCase()))
+        .map(ref => ({ ...parseTableName(ref.name, 'source'), line: ref.line, column: ref.column }));
 
-    // Remove targets from sources if they appear in both (a table being written to
-    // might also appear in FROM clause for MERGE/UPDATE with self-reference)
-    const filteredSources = sources.filter(s =>
-        !seenTargets.has(s.fullName.toLowerCase())
-    );
-
-    // Create query preview (first 100 chars, normalized)
-    const queryPreview = sql.replace(/\s+/g, ' ').trim().substring(0, 100);
-
-    return {
-        sources: filteredSources,
-        targets,
-        queryPreview: queryPreview + (sql.length > 100 ? '...' : '')
-    };
+    const preview = sql.replace(/\s+/g, ' ').trim().substring(0, 100);
+    return { sources, targets, queryPreview: preview + (sql.length > 100 ? '...' : '') };
 }
 
 interface TargetMatch {
@@ -76,128 +45,62 @@ interface TargetMatch {
     column?: number;
 }
 
-/**
- * Convert offset in source string to line/column
- */
-function offsetToLineColumn(source: string, offset: number): { line: number; column: number } {
-    let line = 1;
-    let column = 1;
-    for (let i = 0; i < offset && i < source.length; i++) {
-        if (source[i] === '\n') {
-            line++;
-            column = 1;
-        } else {
-            column++;
+const NAME = String.raw`((?:\[[^\]]+\]|"[^"]+"|[\w@#$]+)(?:\.(?:\[[^\]]+\]|"[^"]+"|[\w@#$]+)?)*)`;
+const TOP = String.raw`(?:TOP\s*\(\s*\d+\s*\)\s+)?`;
+
+/** Written tables by statement kind. Regex over the raw text — ranges are only used for navigation. */
+const TARGET_PATTERNS: Array<{ re: RegExp; type: string }> = [
+    { re: new RegExp(String.raw`\bINSERT\s+${TOP}(?:INTO\s+)?${NAME}`, 'gi'), type: 'INSERT' },
+    { re: new RegExp(String.raw`\bINTO\s+${NAME}\s+FROM\b`, 'gi'), type: 'SELECT INTO' },
+    { re: new RegExp(String.raw`\bCREATE\s+(?:OR\s+ALTER\s+)?TABLE\s+${NAME}`, 'gi'), type: 'CREATE TABLE' },
+    { re: new RegExp(String.raw`\bCREATE\s+(?:OR\s+ALTER\s+)?(?:MATERIALIZED\s+)?VIEW\s+${NAME}`, 'gi'), type: 'CREATE VIEW' },
+    { re: new RegExp(String.raw`\bMERGE\s+${TOP}(?:INTO\s+)?${NAME}`, 'gi'), type: 'MERGE' },
+    { re: new RegExp(String.raw`\bUPDATE\s+${TOP}${NAME}\s+(?:(?:AS\s+)?\w+\s+)?SET\b`, 'gi'), type: 'UPDATE' },
+    { re: new RegExp(String.raw`\bDELETE\s+${TOP}(?:FROM\s+)?${NAME}`, 'gi'), type: 'DELETE' },
+    { re: new RegExp(String.raw`\bTRUNCATE\s+TABLE\s+${NAME}`, 'gi'), type: 'TRUNCATE' },
+];
+
+function extractTargetTables(sql: string): TargetMatch[] {
+    const aliases = aliasMap(sql);
+    const results: TargetMatch[] = [];
+    for (const { re, type } of TARGET_PATTERNS) {
+        re.lastIndex = 0;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(sql)) !== null) {
+            const raw = m[1];
+            if (!raw || raw.startsWith('@')) { continue; }
+            let tableName = normalizeTableName(raw);
+            // `UPDATE t SET ... FROM dbo.Orders t` / `DELETE t FROM ...` — the target is the alias.
+            if (!tableName.includes('.')) { tableName = aliases.get(tableName.toLowerCase()) ?? tableName; }
+            const pos = offsetToLineColumn(sql, m.index + m[0].indexOf(raw));
+            results.push({ tableName, statementType: type, line: pos.line, column: pos.column });
         }
+    }
+    return results;
+}
+
+/** alias (lowercased) → normalised table name, over every TableIdentifier in the script. */
+function aliasMap(sql: string): Map<string, string> {
+    const out = new Map<string, string>();
+    for (const id of collectTableIdentifiers(parse(sql).items)) {
+        const aliasItem = id.items.find(c => c.item_type === 'TableIdentifierAlias');
+        const ref = tableRefOf(id, sql);
+        if (aliasItem && ref && !ref.isCte) { out.set(unquotePart(textAt(sql, aliasItem.range)).toLowerCase(), ref.name); }
+    }
+    return out;
+}
+
+function offsetToLineColumn(source: string, offset: number): { line: number; column: number } {
+    let line = 1, column = 1;
+    for (let i = 0; i < offset && i < source.length; i++) {
+        if (source[i] === '\n') { line++; column = 1; } else { column++; }
     }
     return { line, column };
 }
 
-function extractTargetTables(sql: string): TargetMatch[] {
-    const results: TargetMatch[] = [];
-
-    // Regex patterns for different DML/DDL statements
-    // Pattern for table names: either backtick-quoted or unquoted identifiers with dots
-    const tablePattern = '(`[^`]+`|[a-zA-Z_][a-zA-Z0-9_]*(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*)';
-
-    // INSERT INTO table_name
-    const insertPattern = new RegExp(
-        `INSERT\\s+(?:INTO\\s+)?${tablePattern}`,
-        'gi'
-    );
-
-    // CREATE [OR REPLACE] [TEMP|TEMPORARY] TABLE [IF NOT EXISTS] table_name
-    const createPattern = new RegExp(
-        `CREATE\\s+(?:OR\\s+REPLACE\\s+)?(?:TEMP(?:ORARY)?\\s+)?TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?${tablePattern}`,
-        'gi'
-    );
-
-    // CREATE [OR REPLACE] [MATERIALIZED] VIEW [IF NOT EXISTS] view_name
-    const createViewPattern = new RegExp(
-        `CREATE\\s+(?:OR\\s+REPLACE\\s+)?(?:MATERIALIZED\\s+)?VIEW\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?${tablePattern}`,
-        'gi'
-    );
-
-    // MERGE [INTO] table_name
-    const mergePattern = new RegExp(
-        `MERGE\\s+(?:INTO\\s+)?${tablePattern}`,
-        'gi'
-    );
-
-    // UPDATE table_name SET
-    const updatePattern = new RegExp(
-        `UPDATE\\s+${tablePattern}\\s+(?:AS\\s+\\w+\\s+)?SET`,
-        'gi'
-    );
-
-    // DELETE [FROM] table_name
-    const deletePattern = new RegExp(
-        `DELETE\\s+(?:FROM\\s+)?${tablePattern}`,
-        'gi'
-    );
-
-    // TRUNCATE TABLE table_name
-    const truncatePattern = new RegExp(
-        `TRUNCATE\\s+TABLE\\s+${tablePattern}`,
-        'gi'
-    );
-
-    // Process each pattern
-    const patterns: Array<{ pattern: RegExp; type: string }> = [
-        { pattern: insertPattern, type: 'INSERT' },
-        { pattern: createPattern, type: 'CREATE TABLE' },
-        { pattern: createViewPattern, type: 'CREATE VIEW' },
-        { pattern: mergePattern, type: 'MERGE' },
-        { pattern: updatePattern, type: 'UPDATE' },
-        { pattern: deletePattern, type: 'DELETE' },
-        { pattern: truncatePattern, type: 'TRUNCATE' },
-    ];
-
-    for (const { pattern, type } of patterns) {
-        let match;
-        while ((match = pattern.exec(sql)) !== null) {
-            if (match[1]) {
-                // Clean up the table name (remove backticks)
-                const tableName = match[1].replace(/`/g, '');
-                // Calculate position - find where the table name starts in the match
-                const tableNameStart = match.index + match[0].indexOf(match[1]);
-                const position = offsetToLineColumn(sql, tableNameStart);
-                results.push({
-                    tableName,
-                    statementType: type,
-                    line: position.line,
-                    column: position.column
-                });
-            }
-        }
-    }
-
-    return results;
-}
-
 function parseTableName(fullName: string, role: 'source' | 'target'): LineageTable {
     const parts = fullName.split('.');
-
-    if (parts.length === 3) {
-        return {
-            fullName,
-            projectId: parts[0],
-            datasetId: parts[1],
-            tableId: parts[2],
-            role
-        };
-    } else if (parts.length === 2) {
-        return {
-            fullName,
-            datasetId: parts[0],
-            tableId: parts[1],
-            role
-        };
-    } else {
-        return {
-            fullName,
-            tableId: parts[0],
-            role
-        };
-    }
+    if (parts.length >= 3) { return { fullName, database: parts[parts.length - 3], schema: parts[parts.length - 2], table: parts[parts.length - 1], role }; }
+    if (parts.length === 2) { return { fullName, schema: parts[0], table: parts[1], role }; }
+    return { fullName, table: parts[0], role };
 }

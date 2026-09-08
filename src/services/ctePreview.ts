@@ -1,4 +1,5 @@
-import { parse } from "sql-parser-cst";
+import { isKw, lineOffsets, matchingParen, splitStatements, Tok, tokenize, unquotePart } from '../language/tsqlParser';
+import { bracket } from './objectRef';
 
 export interface CtePreview {
     /** CTE name as written (unquoted). */
@@ -6,122 +7,55 @@ export interface CtePreview {
     /** Character offset of the CTE name in the source — used to place the CodeLens. */
     nameOffset: number;
     /**
-     * Rewritten query that selects from this CTE. Keeps every CTE from the start
-     * of the WITH clause through this one (positional truncation), which inherently
-     * includes all of its dependencies — SQL forbids a CTE from referencing one
-     * defined later, so everything the target needs is already above it.
+     * Rewritten query that selects from this CTE. Keeps every CTE from the start of the WITH
+     * clause through this one verbatim (a CTE can only reference earlier ones, so its whole
+     * dependency chain is included) and appends `SELECT TOP n * FROM [cte]`.
      */
     previewSql: string;
 }
 
 /**
- * Builds a "preview this CTE" query for every CTE in each top-level WITH clause.
- *
- * For a CTE at position i, the preview keeps `WITH cte0 …, ctei` verbatim from the
- * source (preserving RECURSIVE, comments, formatting) and appends
- * `SELECT * FROM <ctei> LIMIT <rowLimit>`.
- *
- * Returns an empty array if the SQL fails to parse. Nested CTEs inside subqueries
- * are intentionally ignored — only the outermost WITH per statement is surfaced.
+ * One preview per CTE of each top-level WITH statement. Preceding DECLARE / SET statements are
+ * prepended so variables resolve when the preview runs alone. Nested WITHs inside sub-queries
+ * are ignored — only CTEs the user can reference at top level are surfaced.
  */
 export function extractCtePreviews(sql: string, rowLimit: number): CtePreview[] {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let cst: any;
-    try {
-        cst = parse(sql, { dialect: "bigquery", includeRange: true });
-    } catch {
-        return [];
-    }
-
-    if (!cst || cst.type !== "program" || !Array.isArray(cst.statements)) {
-        return [];
-    }
-
     const limit = Number.isFinite(rowLimit) && rowLimit > 0 ? Math.floor(rowLimit) : 100;
+    const offs = lineOffsets(sql);
+    const startOf = (t: Tok) => offs[t.line] + t.start;
+    const endOf = (t: Tok) => offs[t.line] + t.end;
+    const textOf = (toks: Tok[]) => sql.slice(startOf(toks[0]), endOf(toks[toks.length - 1]));
+
+    const stmts = splitStatements(tokenize(sql))
+        .map(s => s.filter(t => t.kind !== 'comment'))
+        .filter(s => s.length > 0);
+
     const previews: CtePreview[] = [];
+    for (let si = 0; si < stmts.length; si++) {
+        const toks = stmts[si];
+        if (!isKw(toks[0], 'WITH')) { continue; }
 
-    const statements = cst.statements as unknown[];
-    for (let stmtIdx = 0; stmtIdx < statements.length; stmtIdx++) {
-        const stmt = statements[stmtIdx];
-        const withClause = findOutermostWithClause(stmt);
-        if (!withClause) { continue; }
+        const prefixParts = stmts.slice(0, si)
+            .filter(s => isKw(s[0], 'DECLARE') || isKw(s[0], 'SET'))
+            .map(s => textOf(s).replace(/;\s*$/, '') + ';');
+        const prefix = prefixParts.length ? prefixParts.join('\n') + '\n' : '';
 
-        const startOffset: number | undefined = withClause.withKw?.range?.[0];
-        const items: unknown[] | undefined = withClause.tables?.items;
-        if (typeof startOffset !== "number" || !Array.isArray(items)) { continue; }
-
-        // Collect any preceding DECLARE / SET statements so variables referenced
-        // inside the CTEs resolve when the preview runs in isolation. sql-parser-cst
-        // strips the trailing ';' from statement ranges, so we re-append it.
-        const prefix = collectScriptPrefix(sql, statements, stmtIdx);
-
-        for (const cte of items) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const node = cte as any;
-            if (node?.type !== "common_table_expr") { continue; }
-
-            const name: string | undefined = node.table?.name;
-            const nameOffset: number | undefined = node.table?.range?.[0];
-            const endOffset: number | undefined = node.range?.[1];
-            if (!name || typeof nameOffset !== "number" || typeof endOffset !== "number") { continue; }
-
-            const head = sql.slice(startOffset, endOffset);
-            const previewSql = `${prefix}${head}\nSELECT * FROM \`${name}\` LIMIT ${limit}`;
-            previews.push({ name, nameOffset, previewSql });
+        let i = 1;
+        while (i < toks.length && toks[i].kind === 'ident') {
+            const nameTok = toks[i++];
+            if (toks[i]?.kind === 'punct' && toks[i].text === '(') { i = matchingParen(toks, i) + 1; }   // column list
+            if (!isKw(toks[i], 'AS')) { break; }
+            i++;
+            if (!(toks[i]?.kind === 'punct' && toks[i].text === '(')) { break; }
+            const close = matchingParen(toks, i);
+            if (toks[close]?.text !== ')') { break; }                                                // unterminated body
+            const name = unquotePart(nameTok.text);
+            const head = sql.slice(startOf(toks[0]), endOf(toks[close]));
+            previews.push({ name, nameOffset: startOf(nameTok), previewSql: `${prefix}${head}\nSELECT TOP ${limit} * FROM ${bracket(name)}` });
+            i = close + 1;
+            if (toks[i]?.kind === 'punct' && toks[i].text === ',') { i++; continue; }
+            break;
         }
     }
-
     return previews;
-}
-
-const PREFIX_STATEMENT_TYPES = new Set([
-    "declare_stmt",
-    "set_stmt"
-]);
-
-function collectScriptPrefix(sql: string, statements: unknown[], targetIdx: number): string {
-    const parts: string[] = [];
-    for (let i = 0; i < targetIdx; i++) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const s = statements[i] as any;
-        if (!s || !PREFIX_STATEMENT_TYPES.has(s.type)) { continue; }
-        const range = s.range;
-        if (!Array.isArray(range) || range.length < 2) { continue; }
-        const text = sql.slice(range[0], range[1]).trim().replace(/;\s*$/, "");
-        if (text) { parts.push(text + ";"); }
-    }
-    return parts.length > 0 ? parts.join("\n") + "\n" : "";
-}
-
-/**
- * Returns the WITH clause with the smallest start offset within a statement — i.e.
- * the outermost one. Nested WITH clauses (inside subqueries) have larger offsets
- * and are skipped, so we only surface CTEs the user can reference at top level.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function findOutermostWithClause(node: any): any | null {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let best: any = null;
-
-    const walk = (n: unknown): void => {
-        if (!n || typeof n !== "object") { return; }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const obj = n as any;
-        if (obj.type === "with_clause") {
-            const start = obj.range?.[0] ?? Number.POSITIVE_INFINITY;
-            const bestStart = best?.range?.[0] ?? Number.POSITIVE_INFINITY;
-            if (start < bestStart) { best = obj; }
-        }
-        for (const key of Object.keys(obj)) {
-            const value = obj[key];
-            if (Array.isArray(value)) {
-                value.forEach(walk);
-            } else if (value && typeof value === "object") {
-                walk(value);
-            }
-        }
-    };
-
-    walk(node);
-    return best;
 }

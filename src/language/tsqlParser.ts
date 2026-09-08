@@ -37,12 +37,12 @@ const STATEMENT_START = new Set<string>([
 ]);
 
 /** After these, an identifier chain names a table (or CTE). */
-const TABLE_INTRO = new Set<string>(['FROM', 'JOIN', 'INTO', 'UPDATE', 'APPLY', 'TABLE', 'DELETE', 'MERGE']);
+const TABLE_INTRO = new Set<string>(['FROM', 'JOIN', 'INTO', 'UPDATE', 'APPLY', 'TABLE', 'DELETE', 'MERGE', 'USING']);
 
 /** A statement whose head is one of these may legitimately contain another statement-start keyword. */
 const NESTING_HEADS = new Set<string>(['WITH', 'INSERT', 'UPDATE', 'IF', 'WHILE', 'BEGIN', 'CREATE', 'ALTER', 'MERGE', 'DECLARE', 'SET']);
 
-interface Tok {
+export interface Tok {
     kind: 'ident' | 'keyword' | 'number' | 'string' | 'operator' | 'punct' | 'comment';
     text: string;
     line: number;
@@ -178,11 +178,12 @@ function node(type: string, items: BqsqlDocumentItem[]): BqsqlDocumentItem {
     return { item_type: type, range: [], items };
 }
 
-function isKw(t: Tok | undefined, word: string): boolean {
+export function isKw(t: Tok | undefined, word: string): boolean {
     return !!t && t.kind === 'keyword' && t.text.toUpperCase() === word;
 }
 
-function matchingParen(toks: Tok[], open: number): number {
+/** Index of the `)` closing the `(` at `open`; the last token index when unbalanced. */
+export function matchingParen(toks: Tok[], open: number): number {
     let depth = 0;
     for (let i = open; i < toks.length; i++) {
         if (toks[i].kind !== 'punct') { continue; }
@@ -375,7 +376,8 @@ function statementType(toks: Tok[]): string {
     }
 }
 
-function splitStatements(toks: Tok[]): Tok[][] {
+/** Statement boundaries on `;`, `GO`, or a bare statement-start keyword at depth 0. Leading comments travel with the statement that follows them. */
+export function splitStatements(toks: Tok[]): Tok[][] {
     const out: Tok[][] = [];
     let cur: Tok[] = [];
     let depth = 0;
@@ -430,6 +432,13 @@ export function collectTableIdentifiers(items: BqsqlDocumentItem[], out: BqsqlDo
         if (it.item_type === 'TableIdentifier') { out.push(it); }
         if (it.items?.length) { collectTableIdentifiers(it.items, out); }
     }
+    return out;
+}
+
+/** Absolute offset of the first character of every line, for consumers that speak offsets. */
+export function lineOffsets(sql: string): number[] {
+    const out = [0];
+    for (let i = 0; i < sql.length; i++) { if (sql[i] === '\n') { out.push(i + 1); } }
     return out;
 }
 
