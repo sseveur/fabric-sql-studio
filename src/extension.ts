@@ -403,7 +403,8 @@ export function activate(context: ExtensionContext) {
 		vscode.commands.registerCommand(commands.COMMAND_JOB_HISTORY_TOGGLE_ALL_USERS, () => jobHistoryTreeDataProvider.toggleAllUsers()),
 		vscode.commands.registerCommand(commands.COMMAND_JOB_HISTORY_LOAD_MORE, () => jobHistoryTreeDataProvider.loadMore()),
 		vscode.commands.registerCommand(commands.COMMAND_JOB_HISTORY_DETAILS, commands.commandJobHistoryDetails),
-		vscode.commands.registerCommand(commands.COMMAND_EXPLAIN_QUERY, commands.commandExplainQuery)
+		vscode.commands.registerCommand(commands.COMMAND_EXPLAIN_QUERY, commands.commandExplainQuery),
+		vscode.commands.registerCommand(commands.COMMAND_EXPLAIN_QUERY_XML, commands.commandExplainQueryXml)
 	);
 
 	// bigquery-authentication

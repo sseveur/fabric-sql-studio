@@ -615,6 +615,10 @@
 				"icon": "$(graph)"
 			},
 			{
+				"command": "vscode-bigquery.explain-query-xml",
+				"title": "BigQuery: Show Estimated Plan XML"
+			},
+			{
 				"command": "vscode-bigquery.job-history-details",
 				"title": "BigQuery: Job Details",
 				"icon": "$(info)"

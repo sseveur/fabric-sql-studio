@@ -28,7 +28,7 @@ import { ResultsGridRenderRequestV2, ResultsGridRenderRequestV2Type } from './ta
 import { Dataset, Table } from '@google-cloud/bigquery';
 import { formatBigQuerySQL, formatErrorSummary } from './language/bqsqlFormatter';
 import { renderRequestDetailsHtml } from './activitybar/jobDetailsPanel';
-import { formatEstimate, parsePlanEstimate, prettyXml } from './services/planEstimate';
+import { formatEstimate, parsePlanEstimate, parsePlanStatements, prettyXml, renderPlanHtml } from './services/planEstimate';
 import { textToNotebookData } from './notebook/bqSqlNotebookSerializer';
 import { QueryHistoryItem, QueryHistoryService } from './services/queryHistoryService';
 import { TableIndexService } from './services/tableIndexService';
@@ -70,6 +70,7 @@ export const COMMAND_JOB_HISTORY_TOGGLE_ALL_USERS = "vscode-bigquery.job-history
 export const COMMAND_JOB_HISTORY_LOAD_MORE = "vscode-bigquery.job-history-load-more";
 export const COMMAND_JOB_HISTORY_DETAILS = "vscode-bigquery.job-history-details";
 export const COMMAND_EXPLAIN_QUERY = "vscode-bigquery.explain-query";
+export const COMMAND_EXPLAIN_QUERY_XML = "vscode-bigquery.explain-query-xml";
 export const COMMAND_HISTORY_REFRESH = "vscode-bigquery.history-refresh";
 export const COMMAND_SHOW_LINEAGE = "vscode-bigquery.show-lineage";
 export const COMMAND_SHOW_LINEAGE_SELECTION = "vscode-bigquery.show-lineage-selection";
@@ -873,14 +874,34 @@ export const commandExplainQuery = async function () {
 		const xml = await vscode.window.withProgress(
 			{ location: vscode.ProgressLocation.Window, title: `Estimating plan on ${route.conn.id}…` },
 			() => clientFor(route.conn).explain(sql));
+		lastPlanXml = xml;
 		const estimate = parsePlanEstimate(xml);
 		showQueryStatus(`${formatEstimate(estimate)} · ${route.conn.id}`,
 			[`${estimate.statements} statement(s)`, ...estimate.topOperators.map(o => `  ${o}`), ...(estimate.warnings.length ? ['Warnings: ' + estimate.warnings.join(', ')] : [])].join('\n'));
-		const doc = await vscode.workspace.openTextDocument({ language: 'xml', content: prettyXml(xml) });
-		await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: true, preserveFocus: true });
+
+		if (!planPanel) {
+			planPanel = vscode.window.createWebviewPanel('bigquery-plan', 'Estimated Plan', { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }, { enableFindWidget: true, enableScripts: false, retainContextWhenHidden: true });
+			planPanel.onDidDispose(() => { planPanel = null; });
+		} else {
+			planPanel.reveal(undefined, true);
+		}
+		planPanel.webview.html = renderPlanHtml(parsePlanStatements(xml), route.conn.id);
 	} catch (error: any) {
 		vscode.window.showErrorMessage(`Estimated plan failed: ${error?.message ?? error}`);
 	}
+};
+
+let planPanel: vscode.WebviewPanel | null = null;
+let lastPlanXml: string | null = null;
+
+/** Raw SHOWPLAN XML of the last estimate, indented, for SSMS / plan-viewer users. */
+export const commandExplainQueryXml = async function () {
+	if (!lastPlanXml) {
+		await commandExplainQuery();
+		if (!lastPlanXml) { return; }
+	}
+	const doc = await vscode.workspace.openTextDocument({ language: 'xml', content: prettyXml(lastPlanXml) });
+	await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: true });
 };
 
 export const commandHistoryDelete = async function (arg: any) {

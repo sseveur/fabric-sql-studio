@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { formatEstimate, parsePlanEstimate, prettyXml } from '../../services/planEstimate';
+import { formatEstimate, parsePlanEstimate, parsePlanStatements, prettyXml, renderPlanHtml } from '../../services/planEstimate';
 
 const PLAN = `<?xml version="1.0" encoding="utf-16"?>
 <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan" Version="1.564" Build="16.0.1000.6">
@@ -34,6 +34,25 @@ suite('planEstimate', () => {
         assert.ok(s.includes('cost 1.50'), s);
         assert.ok(s.includes('$(warning) 2'), s);
         assert.ok(formatEstimate({ statements: 1, subtreeCost: 0, estimatedRows: 2_500_000, warnings: [], topOperators: [] }).includes('2.5M rows'));
+    });
+
+    test('parsePlanStatements builds the operator tree with objects and unescaped text', () => {
+        const xml = '<StmtSimple StatementText="SELECT TOP 100&#xa;*" StatementType="SELECT" StatementSubTreeCost="0.05" StatementEstRows="100">'
+            + '<QueryPlan><RelOp PhysicalOp="Top" LogicalOp="Top" EstimateRows="100" EstimatedTotalSubtreeCost="0.05">'
+            + '<RelOp PhysicalOp="Clustered Index Scan" LogicalOp="Clustered Index Scan" EstimateRows="1000" EstimatedTotalSubtreeCost="0.04">'
+            + '<Object Database="[D]" Schema="[s]" Table="[T]" Index="[PK]"></Object></RelOp></RelOp></QueryPlan></StmtSimple>';
+        const [s] = parsePlanStatements(xml);
+        assert.strictEqual(s.text, 'SELECT TOP 100\n*');
+        assert.strictEqual(s.root?.physicalOp, 'Top');
+        assert.strictEqual(s.root?.children[0].object, '[D].[s].[T] [PK]');
+        assert.strictEqual(s.root?.children[0].estimateRows, 1000);
+        const html = renderPlanHtml([s], 'gold-dev');
+        assert.ok(html.includes('Clustered Index Scan') && html.includes('[D].[s].[T]') && html.includes('gold-dev'));
+        assert.ok(!html.includes('<script'));
+    });
+
+    test('prettyXml collapses empty element pairs', () => {
+        assert.strictEqual(prettyXml('<A><B x="1"></B></A>'), '<A>\n  <B x="1"/>\n</A>');
     });
 
     test('prettyXml indents one-line XML and keeps text content inline', () => {
