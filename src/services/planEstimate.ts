@@ -130,7 +130,7 @@ export function fmtRows(n: number): string {
 }
 
 /** Plan panel HTML: per statement, an indented operator tree with rows / cost / % of statement. No scripts. */
-export function renderPlanHtml(statements: PlanStatement[], connectionId: string): string {
+export function renderPlanHtml(statements: PlanStatement[], connectionId: string, raw = ''): string {
     const blocks = statements.map((s, i) => {
         const total = s.subtreeCost || 1;
         const rows: string[] = [];
@@ -175,9 +175,15 @@ export function renderPlanHtml(statements: PlanStatement[], connectionId: string
 </style></head><body>
 <h1>Estimated execution plan</h1>
 <div class="sub">${esc(connectionId)} · nothing was executed · costs are optimizer units, comparable between plans on the same endpoint</div>
-${blocks || '<p>No statements in plan.</p>'}
+${blocks || noPlanHtml(raw)}
 <p class="note">"Own cost" is the operator's share of the statement's subtree cost. Use <b>BigQuery: Show Estimated Plan XML</b> for the raw SHOWPLAN.</p>
 </body></html>`;
+}
+
+/** Shown when nothing parsed: the endpoint's raw reply (head) so the failure is diagnosable. */
+function noPlanHtml(raw: string): string {
+    if (!raw.trim()) { return '<p class="warn">The endpoint returned no plan output for SET SHOWPLAN_XML ON.</p>'; }
+    return `<p class="warn">Plan output could not be parsed (${raw.length} chars). First part of the reply:</p><pre class="sql">${esc(raw.slice(0, 3000))}</pre>`;
 }
 
 /** SQL Server returns SHOWPLAN XML on one line; indent it for reading. */

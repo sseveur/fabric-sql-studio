@@ -885,7 +885,7 @@ export const commandExplainQuery = async function () {
 		} else {
 			planPanel.reveal(undefined, true);
 		}
-		planPanel.webview.html = renderPlanHtml(parsePlanStatements(xml), route.conn.id);
+		planPanel.webview.html = renderPlanHtml(parsePlanStatements(xml), route.conn.id, xml);
 	} catch (error: any) {
 		vscode.window.showErrorMessage(`Estimated plan failed: ${error?.message ?? error}`);
 	}
