@@ -147,6 +147,8 @@ export class SqlServerClient {
             pool: { max: 1, min: 0 },
         }).connect();
         try {
+            // Fabric Lakehouse endpoints ignore the login-packet TEXTSIZE and cut the plan at 2048 chars.
+            await solo.request().batch('SET TEXTSIZE 2147483647');
             await solo.request().batch('SET SHOWPLAN_XML ON');
             const res = await solo.request().batch(text);
             const sets = (res.recordsets as unknown as Array<Array<Record<string, unknown>>>) ?? [];
