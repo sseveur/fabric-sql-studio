@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { formatEstimate, parsePlanEstimate } from '../../services/planEstimate';
+import { formatEstimate, parsePlanEstimate, prettyXml } from '../../services/planEstimate';
 
 const PLAN = `<?xml version="1.0" encoding="utf-16"?>
 <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan" Version="1.564" Build="16.0.1000.6">
@@ -34,6 +34,13 @@ suite('planEstimate', () => {
         assert.ok(s.includes('cost 1.50'), s);
         assert.ok(s.includes('$(warning) 2'), s);
         assert.ok(formatEstimate({ statements: 1, subtreeCost: 0, estimatedRows: 2_500_000, warnings: [], topOperators: [] }).includes('2.5M rows'));
+    });
+
+    test('prettyXml indents one-line XML and keeps text content inline', () => {
+        const out = prettyXml('<?xml version="1.0"?><A x="1"><B/><C>text</C><D><E/></D></A>');
+        assert.strictEqual(out, [
+            '<?xml version="1.0"?>', '<A x="1">', '  <B/>', '  <C>text</C>', '  <D>', '    <E/>', '  </D>', '</A>',
+        ].join('\n'));
     });
 
     test('empty / non-plan input degrades to zeros', () => {

@@ -28,7 +28,7 @@ import { ResultsGridRenderRequestV2, ResultsGridRenderRequestV2Type } from './ta
 import { Dataset, Table } from '@google-cloud/bigquery';
 import { formatBigQuerySQL, formatErrorSummary } from './language/bqsqlFormatter';
 import { renderRequestDetailsHtml } from './activitybar/jobDetailsPanel';
-import { formatEstimate, parsePlanEstimate } from './services/planEstimate';
+import { formatEstimate, parsePlanEstimate, prettyXml } from './services/planEstimate';
 import { textToNotebookData } from './notebook/bqSqlNotebookSerializer';
 import { QueryHistoryItem, QueryHistoryService } from './services/queryHistoryService';
 import { TableIndexService } from './services/tableIndexService';
@@ -876,7 +876,7 @@ export const commandExplainQuery = async function () {
 		const estimate = parsePlanEstimate(xml);
 		showQueryStatus(`${formatEstimate(estimate)} · ${route.conn.id}`,
 			[`${estimate.statements} statement(s)`, ...estimate.topOperators.map(o => `  ${o}`), ...(estimate.warnings.length ? ['Warnings: ' + estimate.warnings.join(', ')] : [])].join('\n'));
-		const doc = await vscode.workspace.openTextDocument({ language: 'xml', content: xml });
+		const doc = await vscode.workspace.openTextDocument({ language: 'xml', content: prettyXml(xml) });
 		await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: true, preserveFocus: true });
 	} catch (error: any) {
 		vscode.window.showErrorMessage(`Estimated plan failed: ${error?.message ?? error}`);

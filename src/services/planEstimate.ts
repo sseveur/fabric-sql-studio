@@ -43,6 +43,27 @@ export function formatEstimate(p: PlanEstimate): string {
     return `$(graph) est. ${rows} rows · cost ${p.subtreeCost.toFixed(2)}${p.warnings.length ? ` · $(warning) ${p.warnings.length}` : ''}`;
 }
 
+/** SQL Server returns SHOWPLAN XML on one line; indent it for reading. ponytail: regex indenter, no XML dependency. */
+export function prettyXml(xml: string): string {
+    const tokens = xml.replace(/>\s*</g, '><').split(/(?=<)|(?<=>)/).filter(t => t.length > 0);
+    let depth = 0;
+    let inlineText = false;
+    const out: string[] = [];
+    for (const t of tokens) {
+        if (/^<\?/.test(t)) { out.push(t); continue; }
+        if (/^<\//.test(t)) {
+            depth = Math.max(0, depth - 1);
+            if (inlineText) { out[out.length - 1] += t; inlineText = false; } else { out.push('  '.repeat(depth) + t); }
+            continue;
+        }
+        if (/^<[^>]*\/>$/.test(t)) { out.push('  '.repeat(depth) + t); continue; }
+        if (/^</.test(t)) { out.push('  '.repeat(depth) + t); depth++; continue; }
+        out[out.length - 1] += t;   // text content stays on its element's line
+        inlineText = true;
+    }
+    return out.join('\n');
+}
+
 function num(v: string | undefined): number {
     const n = Number(v);
     return isFinite(n) ? n : 0;

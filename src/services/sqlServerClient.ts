@@ -129,22 +129,30 @@ export class SqlServerClient {
     }
 
     /**
-     * Estimated plan as SHOWPLAN XML. `SET SHOWPLAN_XML ON` must be alone in its batch and applies
-     * to the connection, so the three batches run inside one transaction to pin a single pooled
-     * connection; the transaction is always rolled back (nothing executes while SHOWPLAN is on).
+     * Estimated plan as SHOWPLAN XML. `SET SHOWPLAN_XML ON` is connection-scoped and must be alone
+     * in its batch, and while it is on nothing executes (not even ROLLBACK) — so it runs on a
+     * throwaway single-connection pool that is closed afterwards. A shared pooled connection left
+     * in SHOWPLAN mode would make every later query on it hang.
      */
     public async explain(text: string): Promise<string> {
-        const pool = await this.getPool();
-        const tx = new sql.Transaction(pool);
-        await tx.begin();
+        const tokenInfo = await getAccessToken(SCOPE_TDS, true);
+        if (!tokenInfo) { throw new Error('Not signed in. Use the Authentication view to sign in first.'); }
+        const solo = await new sql.ConnectionPool({
+            server: this.target.server,
+            port: this.target.port ?? 1433,
+            database: this.target.database,
+            authentication: { type: 'azure-active-directory-access-token', options: { token: tokenInfo.token } },
+            options: { encrypt: true, trustServerCertificate: false },
+            requestTimeout: 2 * 60 * 1000,
+            pool: { max: 1, min: 0 },
+        }).connect();
         try {
-            await new sql.Request(tx).batch('SET SHOWPLAN_XML ON');
-            const res = await new sql.Request(tx).batch(text);
-            await new sql.Request(tx).batch('SET SHOWPLAN_XML OFF');
+            await solo.request().batch('SET SHOWPLAN_XML ON');
+            const res = await solo.request().batch(text);
             const sets = (res.recordsets as unknown as Array<Array<Record<string, unknown>>>) ?? [];
             return sets.flat().map(r => String(Object.values(r)[0] ?? '')).join('\n');
         } finally {
-            try { await tx.rollback(); } catch { /* connection may already be back in the pool */ }
+            try { await solo.close(); } catch { /* nothing else uses this connection */ }
         }
     }
 
