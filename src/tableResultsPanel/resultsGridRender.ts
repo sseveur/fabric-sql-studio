@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
 import { getExtensionUri } from '../extension';
 import { COMMAND_DOWNLOAD_CSV, COMMAND_DOWNLOAD_JSONL, COMMAND_COPY_CLIPBOARD } from '../extensionCommands';
-import { ResultsGridRenderRequestV2 } from './resultsGridRenderRequestV2';
-import { SqlPageRequest, SqlPageResponse, SqlResultMessage } from './resultContract';
+import { SqlPageRequest, SqlPageResponse, GridHostMessage } from './resultContract';
 import { getResultPage } from '../services/sqlServerClient';
 
 const GRID_COLOR_KEY_TO_VAR: Record<string, string> = {
@@ -72,7 +71,7 @@ export class ResultsGridRender {
             "default-src 'none'",
             `style-src ${webview.cspSource} 'nonce-${nonce}'`,
             `script-src ${webview.cspSource}`,
-            `connect-src ${webview.cspSource} https://bigquery.googleapis.com`,
+            `connect-src 'none'`,
             `img-src ${webview.cspSource} data:`,
             `font-src ${webview.cspSource}`,
         ].join('; ');
@@ -140,7 +139,7 @@ export class ResultsGridRender {
     }
 
     /** Resolves false (instead of throwing) when the user closed the panel before the query returned. */
-    public postMessage(message: ResultsGridRenderRequestV2 | SqlResultMessage): Thenable<boolean> {
+    public postMessage(message: GridHostMessage): Thenable<boolean> {
         if (this.disposed) { return Promise.resolve(false); }
         return this.webViewPanel.webview.postMessage(message);
     }

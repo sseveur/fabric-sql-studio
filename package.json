@@ -956,7 +956,6 @@
 		"@types/mocha": "^9.1.1",
 		"@types/mssql": "^12.3.0",
 		"@types/node": "16.x",
-		"@types/uuid": "^9.0.0",
 		"@types/vscode": "^1.63.0",
 		"@typescript-eslint/eslint-plugin": "^5.30.0",
 		"@typescript-eslint/parser": "^5.30.0",
@@ -972,8 +971,6 @@
 	},
 	"dependencies": {
 		"@azure/identity": "^4.13.2",
-		"@google-cloud/bigquery": "^7.9.3",
-		"@types/gapi.client.bigquery-v2": "^0.0.2",
 		"@vscode/codicons": "^0.0.32",
 		"@vscode/webview-ui-toolkit": "^1.2.2",
 		"csv-writer": "^1.6.0",

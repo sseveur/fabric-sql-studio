@@ -520,20 +520,6 @@ function postExport(command, ref) {
         payload.resultId = ref.sql.resultId;
         payload.setIndex = ref.sql.setIndex;
     }
-    if (ref.jobReference) {
-        payload.job_reference = {
-            projectId: ref.jobReference.projectId,
-            jobId: ref.jobReference.jobId,
-            location: ref.jobReference.location,
-        };
-    }
-    if (ref.tableReference) {
-        payload.table_reference = {
-            projectId: ref.tableReference.projectId,
-            datasetId: ref.tableReference.datasetId,
-            tableId: ref.tableReference.tableId,
-        };
-    }
     vs().postMessage(payload);
 }
 
@@ -750,75 +736,12 @@ function escapeHtml(s) {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   DEFAULT_PAGE_SIZE: () => (/* binding */ DEFAULT_PAGE_SIZE),
-/* harmony export */   fetchChildJobs: () => (/* binding */ fetchChildJobs),
-/* harmony export */   fetchPage: () => (/* binding */ fetchPage),
-/* harmony export */   fetchTableMetadata: () => (/* binding */ fetchTableMetadata),
-/* harmony export */   fetchTablePage: () => (/* binding */ fetchTablePage),
 /* harmony export */   handleSqlPageMessage: () => (/* binding */ handleSqlPageMessage),
 /* harmony export */   requestSqlPage: () => (/* binding */ requestSqlPage),
 /* harmony export */   toWireRow: () => (/* binding */ toWireRow)
 /* harmony export */ });
+/** Host-side paging for T-SQL results (see resultContract.ts). */
 const PAGE_SIZE = 50;
-const BQ_BASE = 'https://bigquery.googleapis.com/bigquery/v2';
-async function bqGet(url, token) {
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) {
-        const text = await res.text().catch(() => res.statusText);
-        throw new Error(`${res.status}: ${text}`);
-    }
-    return (await res.json());
-}
-async function fetchPage(jobRef, token, startIndex, pageSize = PAGE_SIZE) {
-    const params = new URLSearchParams({
-        maxResults: String(pageSize),
-        startIndex: String(startIndex),
-    });
-    if (jobRef.location) {
-        params.set('location', jobRef.location);
-    }
-    const url = `${BQ_BASE}/projects/${encodeURIComponent(jobRef.projectId)}/queries/${encodeURIComponent(jobRef.jobId)}?${params.toString()}`;
-    return bqGet(url, token);
-}
-async function fetchTableMetadata(tableRef, token) {
-    const url = `${BQ_BASE}/projects/${encodeURIComponent(tableRef.projectId)}/datasets/${encodeURIComponent(tableRef.datasetId)}/tables/${encodeURIComponent(tableRef.tableId)}`;
-    return bqGet(url, token);
-}
-async function fetchTablePage(tableRef, token, startIndex, pageSize = PAGE_SIZE) {
-    const params = new URLSearchParams({
-        maxResults: String(pageSize),
-        startIndex: String(startIndex),
-    });
-    const url = `${BQ_BASE}/projects/${encodeURIComponent(tableRef.projectId)}/datasets/${encodeURIComponent(tableRef.datasetId)}/tables/${encodeURIComponent(tableRef.tableId)}/data?${params.toString()}`;
-    return bqGet(url, token);
-}
-async function fetchChildJobs(parent, token) {
-    const params = new URLSearchParams({
-        parentJobId: parent.jobId,
-        projection: 'full',
-        maxResults: '100',
-    });
-    if (parent.location) {
-        params.set('location', parent.location);
-    }
-    const url = `${BQ_BASE}/projects/${encodeURIComponent(parent.projectId)}/jobs?${params.toString()}`;
-    const res = await bqGet(url, token);
-    const jobs = (res.jobs || []).filter((j) => {
-        const t = j.statistics?.query?.statementType;
-        if (!t) {
-            return false;
-        }
-        return t === 'SELECT' || t === 'WITH' || t.startsWith('CREATE_') || t.startsWith('MERGE') || t === 'UPDATE' || t === 'INSERT' || t === 'DELETE';
-    });
-    return jobs.map((j) => ({
-        jobRef: {
-            projectId: j.jobReference.projectId,
-            jobId: j.jobReference.jobId,
-            location: j.jobReference.location,
-        },
-        statementType: j.statistics?.query?.statementType,
-        dmlStats: j.statistics?.query?.dmlStats,
-    }));
-}
 const DEFAULT_PAGE_SIZE = PAGE_SIZE;
 const pending = new Map();
 let nextRequestId = 1;

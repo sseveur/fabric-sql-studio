@@ -1,10 +1,3 @@
-export enum MessageType {
-    clear = 'clear',
-    executeQuery = 'execute_query',
-    previewTable = 'preview_table',
-    error = 'error',
-}
-
 export interface GridError {
     message: string;
     reason: string | null;
@@ -12,12 +5,7 @@ export interface GridError {
 
 export interface GridMessage {
     requestType: string;
-    projectId: string | null;
-    datasetId?: string | null;
-    tableId?: string | null;
-    token: string | null;
-    job: any | null;
-    error: GridError | null;
+    error?: GridError | null;
 }
 
 export interface BqField {
@@ -27,21 +15,7 @@ export interface BqField {
     fields?: BqField[];
 }
 
-export interface JobReference {
-    projectId: string;
-    jobId: string;
-    location?: string;
-}
-
-export interface TableReference {
-    projectId: string;
-    datasetId: string;
-    tableId: string;
-}
-
 export interface ExportRef {
-    jobReference?: JobReference;
-    tableReference?: TableReference;
     /** Host-held T-SQL result set. */
     sql?: { resultId: string; setIndex: number };
 }
@@ -55,33 +29,8 @@ export interface QueryResultsResponse {
     totalBytesProcessed?: string;
 }
 
-export interface TableMetadata {
-    schema?: { fields: BqField[] };
-    numRows?: string;
-    tableReference?: TableReference;
-    type?: string;
-}
-
 export interface DmlStats {
     insertedRowCount?: string;
     updatedRowCount?: string;
     deletedRowCount?: string;
-}
-
-export interface JobStatistics {
-    query?: {
-        statementType?: string;
-        dmlStats?: DmlStats;
-    };
-}
-
-export interface JobListEntry {
-    jobReference: JobReference;
-    statistics?: JobStatistics;
-    status?: { state?: string; errorResult?: { message?: string } };
-    configuration?: { query?: { query?: string } };
-}
-
-export interface JobListResponse {
-    jobs?: JobListEntry[];
 }

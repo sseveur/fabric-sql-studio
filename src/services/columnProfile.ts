@@ -1,12 +1,6 @@
-import { Job } from '@google-cloud/bigquery';
-import { BigQueryClient, selectFinalResultChildJob } from './bigqueryClient';
-import { JobReference } from './queryResultsMapping';
-
-export interface TableReference {
-    projectId: string;
-    datasetId: string;
-    tableId: string;
-}
+import { bracket, ConnectionRef } from './objectRef';
+import { clientFor } from './sqlServerClient';
+import { ResolvedTable } from './columnResolver';
 
 export interface TopValue {
     value: unknown;
@@ -16,25 +10,23 @@ export interface TopValue {
 export interface ColumnProfile {
     columnName: string;
     columnType: string;
-    /** Total rows in the source result set. */
+    /** Total rows in the source table. */
     totalCount: number;
     /** Number of rows where the column is NULL. */
     nullCount: number;
-    /** Distinct non-null values. `null` if the type isn't hashable (ARRAY/STRUCT). */
+    /** Distinct non-null values. `null` if the type cannot be grouped (xml, geography, ...). */
     distinctCount: number | null;
     /** Distinct non-null values that occur more than once. `null` for opaque types. */
     duplicateValueCount: number | null;
-    /** Total non-null rows belonging to a duplicated value (SUM of counts where count > 1). `null` for opaque types. */
+    /** Total non-null rows belonging to a duplicated value. `null` for opaque types. */
     duplicateRowCount: number | null;
-    /** Whether every non-null value is unique (distinctCount === totalCount - nullCount). `null` for opaque types. */
+    /** Whether every non-null value is unique. `null` for opaque types. */
     isUnique: boolean | null;
-    /** Min value as returned by BigQuery (may be a Date/Big object — caller stringifies). */
     minValue: unknown;
-    /** Max value as returned by BigQuery. */
     maxValue: unknown;
-    /** 11 boundaries from `APPROX_QUANTILES(col, 10)` for numeric/date columns, else `null`. */
+    /** 21 boundaries (p0, p5, …, p100) for numeric columns, else `null`. */
     quantiles: unknown[] | null;
-    /** Top values by frequency (descending) for hashable columns, else `null`. */
+    /** Top values by frequency (descending), else `null`. */
     topValues: TopValue[] | null;
     /** SQL that produced the profile — surfaced in the UI for debugging. */
     sourceSql: string;
@@ -42,191 +34,91 @@ export interface ColumnProfile {
 
 type ProfileTier = 'numeric' | 'orderable' | 'opaque';
 
-const NUMERIC_TYPES = new Set(['INT64', 'INTEGER', 'FLOAT64', 'FLOAT', 'NUMERIC', 'BIGNUMERIC', 'DECIMAL']);
-const ORDERABLE_TYPES = new Set([
-    'STRING', 'BYTES', 'BOOL', 'BOOLEAN',
-    'DATE', 'TIME', 'DATETIME', 'TIMESTAMP'
-]);
+const NUMERIC_TYPES = new Set(['int', 'bigint', 'smallint', 'tinyint', 'decimal', 'numeric', 'float', 'real', 'money', 'smallmoney']);
+/** Types that cannot be compared / grouped: only total and NULL counts are possible. */
+const OPAQUE_TYPES = new Set(['text', 'ntext', 'image', 'xml', 'geography', 'geometry', 'hierarchyid', 'sql_variant']);
 
 function classifyType(columnType: string): ProfileTier {
-    const t = columnType.toUpperCase();
+    const t = columnType.toLowerCase().replace(/\(.*$/, '');
     if (NUMERIC_TYPES.has(t)) { return 'numeric'; }
-    if (ORDERABLE_TYPES.has(t)) { return 'orderable'; }
-    return 'opaque';
+    if (OPAQUE_TYPES.has(t)) { return 'opaque'; }
+    return 'orderable';
 }
 
-function quoteIdent(name: string): string {
-    return '`' + name.replace(/`/g, '``') + '`';
+function fqtn(t: ResolvedTable): string {
+    return `${bracket(t.database)}.${bracket(t.schema)}.${bracket(t.table)}`;
 }
 
-function fqtn(dt: TableReference): string {
-    return `\`${dt.projectId}\`.\`${dt.datasetId}\`.\`${dt.tableId}\``;
-}
+const TOP_K = 20;
+const QUANTILE_STEPS = Array.from({ length: 21 }, (_, i) => (i * 5) / 100);
 
 /**
- * Builds a single SQL statement that returns one row with all profile fields.
- * The shape is tier-specific so we don't have to bend types into placeholders:
- *   - numeric: total/null/distinct/min/max/quantiles/topK
- *   - orderable (string/date/etc.): total/null/distinct/min/max/topK (no quantiles)
- *   - opaque (array/struct/json/geography): total/null only
+ * Profile batch: result set 0 = one summary row, result set 1 = top-K values (non-opaque tiers).
+ * `bit` cannot be MIN/MAX'd, so it is widened to int in the source CTE.
  */
-export function buildProfileSql(dt: TableReference, columnName: string, columnType: string): string {
+export function buildProfileSql(t: ResolvedTable, columnName: string, columnType: string): string {
     const tier = classifyType(columnType);
-    const col = quoteIdent(columnName);
-    const source = fqtn(dt);
-    const TOP_K = 20;
+    const raw = bracket(columnName);
+    const col = /^bit$/i.test(columnType) ? `CAST(${raw} AS int)` : raw;
+    const source = fqtn(t);
 
     if (tier === 'opaque') {
-        return `SELECT
-  COUNT(*) AS total_count,
-  COUNTIF(${col} IS NULL) AS null_count
-FROM ${source}`;
+        return `SELECT COUNT(*) AS total_count, SUM(CASE WHEN ${raw} IS NULL THEN 1 ELSE 0 END) AS null_count FROM ${source};`;
     }
 
-    if (tier === 'numeric') {
-        return `WITH src AS (SELECT ${col} AS v FROM ${source}),
-counts AS (SELECT v, COUNT(*) AS c FROM src WHERE v IS NOT NULL GROUP BY v),
-topk AS (
-  SELECT ARRAY_AGG(STRUCT(v AS value, c AS count) ORDER BY c DESC, v LIMIT ${TOP_K}) AS top_values FROM counts
-)
-SELECT
-  (SELECT COUNT(*) FROM src) AS total_count,
-  (SELECT COUNTIF(v IS NULL) FROM src) AS null_count,
-  (SELECT COUNT(DISTINCT v) FROM src) AS distinct_count,
-  (SELECT COUNT(*) FROM counts WHERE c > 1) AS duplicate_value_count,
-  (SELECT IFNULL(SUM(c), 0) FROM counts WHERE c > 1) AS duplicate_row_count,
-  (SELECT MIN(v) FROM src) AS min_value,
-  (SELECT MAX(v) FROM src) AS max_value,
-  (SELECT APPROX_QUANTILES(v, 20) FROM src) AS quantiles,
-  (SELECT top_values FROM topk) AS top_values`;
-    }
-
-    // orderable (string / bytes / bool / date-ish)
     return `WITH src AS (SELECT ${col} AS v FROM ${source}),
-counts AS (SELECT v, COUNT(*) AS c FROM src WHERE v IS NOT NULL GROUP BY v),
-topk AS (
-  SELECT ARRAY_AGG(STRUCT(v AS value, c AS count) ORDER BY c DESC, v LIMIT ${TOP_K}) AS top_values FROM counts
-)
+counts AS (SELECT v, COUNT(*) AS c FROM src WHERE v IS NOT NULL GROUP BY v)
 SELECT
   (SELECT COUNT(*) FROM src) AS total_count,
-  (SELECT COUNTIF(v IS NULL) FROM src) AS null_count,
-  (SELECT COUNT(DISTINCT v) FROM src) AS distinct_count,
+  (SELECT COUNT(*) FROM src WHERE v IS NULL) AS null_count,
+  (SELECT COUNT(*) FROM counts) AS distinct_count,
   (SELECT COUNT(*) FROM counts WHERE c > 1) AS duplicate_value_count,
-  (SELECT IFNULL(SUM(c), 0) FROM counts WHERE c > 1) AS duplicate_row_count,
+  (SELECT ISNULL(SUM(c), 0) FROM counts WHERE c > 1) AS duplicate_row_count,
   (SELECT MIN(v) FROM src) AS min_value,
-  (SELECT MAX(v) FROM src) AS max_value,
-  (SELECT top_values FROM topk) AS top_values`;
+  (SELECT MAX(v) FROM src) AS max_value;
+SELECT TOP ${TOP_K} v AS value, c AS count
+FROM (SELECT ${col} AS v, COUNT(*) AS c FROM ${source} WHERE ${raw} IS NOT NULL GROUP BY ${col}) x
+ORDER BY c DESC, v;`;
 }
 
-/**
- * Profiles a column against a concrete source table. Used by the right-click flow
- * where we've already resolved the column to its (project, dataset, table).
- */
-export async function runColumnProfileForTable(
-    bqClient: BigQueryClient,
-    tableRef: TableReference,
-    columnName: string,
-    columnType: string
-): Promise<ColumnProfile> {
-    const sql = buildProfileSql(tableRef, columnName, columnType);
-    const profileJob = await bqClient.runQuery(sql);
-    const [rows] = await profileJob.getQueryResults({ maxResults: 1 });
-    return mapProfileRow(rows && rows[0], columnName, columnType, sql);
+/** Separate statement: PERCENTILE_CONT is not available on every endpoint, so its failure is non-fatal. */
+export function buildQuantileSql(t: ResolvedTable, columnName: string): string {
+    const values = QUANTILE_STEPS.map(p => `(${p.toFixed(2)})`).join(',');
+    return `SELECT DISTINCT q.p, PERCENTILE_CONT(q.p) WITHIN GROUP (ORDER BY CAST(s.v AS float)) OVER (PARTITION BY q.p) AS qv
+FROM (SELECT ${bracket(columnName)} AS v FROM ${fqtn(t)} WHERE ${bracket(columnName)} IS NOT NULL) s
+CROSS JOIN (VALUES ${values}) q(p)
+ORDER BY q.p;`;
 }
 
-/**
- * Runs the profile against the destination temp table of a previously-executed job
- * (cheaper and faster than re-running the source query — the result rows are already
- * materialized and live for ~24h).
- */
-export async function runColumnProfile(
-    bqClient: BigQueryClient,
-    jobRef: JobReference,
-    columnName: string,
-    columnType: string
-): Promise<ColumnProfile> {
+export async function runColumnProfileForTable(conn: ConnectionRef, table: ResolvedTable, columnName: string, columnType: string): Promise<ColumnProfile> {
+    const client = clientFor(conn);
+    const sql = buildProfileSql(table, columnName, columnType);
+    const result = await client.runQuery(sql, TOP_K);
+    const summary = result.sets[0]?.rows[0] ?? [];
+    const top = result.sets[1]?.rows ?? null;
 
-    const destination = await resolveDestinationTable(bqClient, jobRef);
-    if (!destination) {
-        throw new Error(
-            'Cannot profile this column: no accessible destination table was found ' +
-            '(the job may have expired after 24h, or it was a DDL with no result rows). ' +
-            'Re-run the query and try again.'
-        );
+    let quantiles: unknown[] | null = null;
+    if (classifyType(columnType) === 'numeric') {
+        try { quantiles = (await client.query(buildQuantileSql(table, columnName))).map(r => r[1]); }
+        catch { quantiles = null; }   // ponytail: endpoint without PERCENTILE_CONT → no distribution chart
     }
-
-    const sql = buildProfileSql(destination, columnName, columnType);
-    const profileJob = await bqClient.runQuery(sql);
-    const [rows] = await profileJob.getQueryResults({ maxResults: 1 });
-    return mapProfileRow(rows && rows[0], columnName, columnType, sql);
+    return mapProfile(summary, top, quantiles, columnName, columnType, sql);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapProfileRow(rowIn: any, columnName: string, columnType: string, sql: string): ColumnProfile {
-    const row = rowIn || {};
-    const topValuesRaw = row.top_values as Array<{ value: unknown; count: unknown }> | null | undefined;
-    const topValues: TopValue[] | null = Array.isArray(topValuesRaw)
-        ? topValuesRaw.map(tv => ({ value: tv.value, count: Number(tv.count ?? 0) }))
-        : null;
-
-    const totalCount = Number(row.total_count ?? 0);
-    const nullCount = Number(row.null_count ?? 0);
-    const distinctCount = row.distinct_count == null ? null : Number(row.distinct_count);
-
+function mapProfile(summary: unknown[], top: unknown[][] | null, quantiles: unknown[] | null, columnName: string, columnType: string, sql: string): ColumnProfile {
+    const n = (i: number) => summary[i] === undefined || summary[i] === null ? null : Number(summary[i]);
+    const totalCount = n(0) ?? 0;
+    const nullCount = n(1) ?? 0;
+    const distinctCount = n(2);
     return {
-        columnName,
-        columnType,
-        totalCount,
-        nullCount,
-        distinctCount,
-        duplicateValueCount: row.duplicate_value_count == null ? null : Number(row.duplicate_value_count),
-        duplicateRowCount: row.duplicate_row_count == null ? null : Number(row.duplicate_row_count),
-        isUnique: distinctCount == null ? null : distinctCount === (totalCount - nullCount),
-        minValue: row.min_value ?? null,
-        maxValue: row.max_value ?? null,
-        quantiles: Array.isArray(row.quantiles) ? row.quantiles : null,
-        topValues,
-        sourceSql: sql
+        columnName, columnType, totalCount, nullCount, distinctCount,
+        duplicateValueCount: n(3),
+        duplicateRowCount: n(4),
+        isUnique: distinctCount === null ? null : distinctCount === totalCount - nullCount,
+        minValue: summary[5] ?? null,
+        maxValue: summary[6] ?? null,
+        quantiles,
+        topValues: top ? top.map(r => ({ value: r[0], count: Number(r[1] ?? 0) })) : null,
+        sourceSql: sql,
     };
-}
-
-/**
- * Resolves the destination table to profile.
- *   - Single-statement job: take the job's own destinationTable.
- *   - SCRIPT parent (multi-statement): walk child jobs in reverse order and pick
- *     the last one that produced a real result set (has a destinationTable and
- *     a non-empty schema). That matches the "final SELECT" the user actually saw.
- */
-export async function resolveDestinationTable(
-    bqClient: BigQueryClient,
-    jobRef: JobReference
-): Promise<TableReference | null> {
-
-    const job = bqClient.getJob(jobRef);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [meta]: any = await job.getMetadata();
-
-    const direct = meta?.configuration?.query?.destinationTable;
-    if (direct?.projectId && direct?.datasetId && direct?.tableId) {
-        return { projectId: direct.projectId, datasetId: direct.datasetId, tableId: direct.tableId };
-    }
-
-    const statementType = meta?.statistics?.query?.statementType;
-    if (statementType !== 'SCRIPT') { return null; }
-
-    let children: Job[] = [];
-    try {
-        children = await bqClient.getChildJobs(jobRef);
-    } catch {
-        return null;
-    }
-
-    const finalChild = selectFinalResultChildJob(children);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const dt = (finalChild as any)?.metadata?.configuration?.query?.destinationTable;
-    if (dt?.projectId && dt?.datasetId && dt?.tableId) {
-        return { projectId: dt.projectId, datasetId: dt.datasetId, tableId: dt.tableId };
-    }
-
-    return null;
 }

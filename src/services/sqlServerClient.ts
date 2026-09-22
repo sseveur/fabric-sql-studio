@@ -1,5 +1,5 @@
 import * as sql from 'mssql';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID as uuidv4 } from 'crypto';
 import { getAccessToken, SCOPE_TDS } from './auth';
 import { SqlColumn, SqlResultSet } from '../tableResultsPanel/resultContract';
 import { ConnectionRef } from './objectRef';

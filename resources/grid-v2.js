@@ -84,14 +84,6 @@ function GridApp() {
                         reason: (msg.error?.reason ?? null),
                     });
                     break;
-                case 'execute_query':
-                    setView({ kind: 'loading', message: 'Loading results…' });
-                    handleExecuteQuery(msg).then(setView).catch(e => setView({ kind: 'error', message: String(e?.message || e), reason: null }));
-                    break;
-                case 'preview_table':
-                    setView({ kind: 'loading', message: 'Loading table…' });
-                    handlePreviewTable(msg).then(setView).catch(e => setView({ kind: 'error', message: String(e?.message || e), reason: null }));
-                    break;
                 default:
                     break;
             }
@@ -122,116 +114,10 @@ function GridApp() {
     return ((0,preact_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { class: "bq-script", children: view.tables.map(t => ((0,preact_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { class: "bq-script-item", children: (0,preact_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(BqTableHost, { view: t }) }, t.key))) }));
 }
 function BqTableHost({ view }) {
-    const { source, token } = view;
-    const fetchRows = (0,preact_hooks__WEBPACK_IMPORTED_MODULE_1__.useCallback)((start, size) => {
-        if (source.kind === 'sql') {
-            return (0,_pagination__WEBPACK_IMPORTED_MODULE_3__.requestSqlPage)(source.resultId, source.setIndex, start, size)
-                .then(rows => ({ rows: rows.map(_pagination__WEBPACK_IMPORTED_MODULE_3__.toWireRow), totalRows: String(view.totalRows) }));
-        }
-        if (source.kind === 'job') {
-            return (0,_pagination__WEBPACK_IMPORTED_MODULE_3__.fetchPage)(source.jobRef, token, start, size);
-        }
-        return (0,_pagination__WEBPACK_IMPORTED_MODULE_3__.fetchTablePage)(source.tableRef, token, start, size);
-    }, [source, token, view.totalRows]);
+    const { source } = view;
+    const fetchRows = (0,preact_hooks__WEBPACK_IMPORTED_MODULE_1__.useCallback)((start, size) => (0,_pagination__WEBPACK_IMPORTED_MODULE_3__.requestSqlPage)(source.resultId, source.setIndex, start, size)
+        .then(rows => ({ rows: rows.map(_pagination__WEBPACK_IMPORTED_MODULE_3__.toWireRow), totalRows: String(view.totalRows) })), [source, view.totalRows]);
     return ((0,preact_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_BqTable__WEBPACK_IMPORTED_MODULE_2__.BqTable, { fetchRows: fetchRows, exportRef: view.exportRef, schema: view.schema, totalRows: view.totalRows, initialRows: view.initialRows, title: view.title, dmlStats: view.dmlStats, statementType: view.statementType, rowsAffected: view.rowsAffected }));
-}
-function jobRefFromJob(job, fallbackProjectId) {
-    const ref = job.jobReference || job.metadata?.jobReference || {};
-    return {
-        projectId: String(ref.projectId || fallbackProjectId),
-        jobId: String(ref.jobId || job.id),
-        location: ref.location,
-    };
-}
-async function handleExecuteQuery(msg) {
-    const job = msg.job;
-    const token = msg.token;
-    const projectId = msg.projectId;
-    if (!job || !token || !projectId) {
-        return { kind: 'error', message: 'Missing job, token, or projectId in message payload.', reason: null };
-    }
-    const jobRef = jobRefFromJob(job, projectId);
-    if (!jobRef.jobId) {
-        return { kind: 'error', message: 'Missing jobId.', reason: null };
-    }
-    const hasScript = (job.statistics?.scriptStatistics || job.metadata?.statistics?.scriptStatistics) != null;
-    if (hasScript) {
-        const children = await (0,_pagination__WEBPACK_IMPORTED_MODULE_3__.fetchChildJobs)(jobRef, String(token));
-        if (children.length === 0) {
-            return { kind: 'error', message: 'Script has no child jobs with results.', reason: null };
-        }
-        const tables = [];
-        for (let i = 0; i < children.length; i++) {
-            const child = children[i];
-            try {
-                const res = await (0,_pagination__WEBPACK_IMPORTED_MODULE_3__.fetchPage)(child.jobRef, String(token), 0, _pagination__WEBPACK_IMPORTED_MODULE_3__.DEFAULT_PAGE_SIZE);
-                tables.push({
-                    key: `child-${child.jobRef.jobId}`,
-                    exportRef: { jobReference: child.jobRef },
-                    schema: (res.schema?.fields || []),
-                    totalRows: parseInt(String(res.totalRows || '0'), 10),
-                    initialRows: res.rows || [],
-                    token: String(token),
-                    source: { kind: 'job', jobRef: child.jobRef },
-                    title: `Statement ${i + 1}${child.statementType ? ` · ${child.statementType}` : ''}`,
-                    dmlStats: child.dmlStats,
-                    statementType: child.statementType,
-                });
-            }
-            catch (e) {
-                // skip failed child
-            }
-        }
-        if (tables.length === 0) {
-            return { kind: 'error', message: 'Script child jobs returned no results.', reason: null };
-        }
-        return { kind: 'tables', tables };
-    }
-    const res = await (0,_pagination__WEBPACK_IMPORTED_MODULE_3__.fetchPage)(jobRef, String(token), 0, _pagination__WEBPACK_IMPORTED_MODULE_3__.DEFAULT_PAGE_SIZE);
-    const jobStats = job.statistics?.query || job.metadata?.statistics?.query || {};
-    return {
-        kind: 'tables',
-        tables: [{
-                key: `job-${jobRef.jobId}`,
-                exportRef: { jobReference: jobRef },
-                schema: (res.schema?.fields || []),
-                totalRows: parseInt(String(res.totalRows || '0'), 10),
-                initialRows: res.rows || [],
-                dmlStats: jobStats.dmlStats,
-                statementType: jobStats.statementType,
-                token: String(token),
-                source: { kind: 'job', jobRef },
-            }],
-    };
-}
-async function handlePreviewTable(msg) {
-    const token = msg.token;
-    const projectId = msg.projectId;
-    const datasetId = msg.datasetId;
-    const tableId = msg.tableId;
-    if (!token || !projectId || !datasetId || !tableId) {
-        return { kind: 'error', message: 'Missing projectId, datasetId, tableId, or token.', reason: null };
-    }
-    const tableRef = { projectId, datasetId, tableId };
-    const meta = await (0,_pagination__WEBPACK_IMPORTED_MODULE_3__.fetchTableMetadata)(tableRef, String(token));
-    const schema = (meta.schema?.fields || []);
-    const totalRows = parseInt(String(meta.numRows || '0'), 10);
-    const rowsRes = totalRows > 0
-        ? await (0,_pagination__WEBPACK_IMPORTED_MODULE_3__.fetchTablePage)(tableRef, String(token), 0, _pagination__WEBPACK_IMPORTED_MODULE_3__.DEFAULT_PAGE_SIZE)
-        : { rows: [] };
-    return {
-        kind: 'tables',
-        tables: [{
-                key: `table-${projectId}.${datasetId}.${tableId}`,
-                exportRef: { tableReference: tableRef },
-                schema,
-                totalRows,
-                initialRows: rowsRes.rows || [],
-                token: String(token),
-                source: { kind: 'table', tableRef },
-                title: `${projectId}.${datasetId}.${tableId}`,
-            }],
-    };
 }
 function viewFromSqlResult(msg) {
     if (!msg.sets.length) {
@@ -244,7 +130,6 @@ function viewFromSqlResult(msg) {
         schema: set.columns.map((c) => ({ name: c.name, type: c.type, mode: c.nullable ? 'NULLABLE' : 'REQUIRED' })),
         totalRows: set.rows.length,
         initialRows: set.rows.map(_pagination__WEBPACK_IMPORTED_MODULE_3__.toWireRow),
-        token: '',
         source: { kind: 'sql', resultId: msg.resultId, setIndex: set.index },
         title: many || set.truncated
             ? `${many ? `Statement ${set.index + 1}` : 'Result'}${set.truncated ? ` · showing first ${set.rows.length.toLocaleString()} of ${set.totalRows.toLocaleString()}+ rows` : ''}`
@@ -759,20 +644,6 @@ function postExport(command, ref) {
         payload.resultId = ref.sql.resultId;
         payload.setIndex = ref.sql.setIndex;
     }
-    if (ref.jobReference) {
-        payload.job_reference = {
-            projectId: ref.jobReference.projectId,
-            jobId: ref.jobReference.jobId,
-            location: ref.jobReference.location,
-        };
-    }
-    if (ref.tableReference) {
-        payload.table_reference = {
-            projectId: ref.tableReference.projectId,
-            datasetId: ref.tableReference.datasetId,
-            tableId: ref.tableReference.tableId,
-        };
-    }
     vs().postMessage(payload);
 }
 
@@ -965,75 +836,12 @@ function escapeHtml(s) {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   DEFAULT_PAGE_SIZE: () => (/* binding */ DEFAULT_PAGE_SIZE),
-/* harmony export */   fetchChildJobs: () => (/* binding */ fetchChildJobs),
-/* harmony export */   fetchPage: () => (/* binding */ fetchPage),
-/* harmony export */   fetchTableMetadata: () => (/* binding */ fetchTableMetadata),
-/* harmony export */   fetchTablePage: () => (/* binding */ fetchTablePage),
 /* harmony export */   handleSqlPageMessage: () => (/* binding */ handleSqlPageMessage),
 /* harmony export */   requestSqlPage: () => (/* binding */ requestSqlPage),
 /* harmony export */   toWireRow: () => (/* binding */ toWireRow)
 /* harmony export */ });
+/** Host-side paging for T-SQL results (see resultContract.ts). */
 const PAGE_SIZE = 50;
-const BQ_BASE = 'https://bigquery.googleapis.com/bigquery/v2';
-async function bqGet(url, token) {
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) {
-        const text = await res.text().catch(() => res.statusText);
-        throw new Error(`${res.status}: ${text}`);
-    }
-    return (await res.json());
-}
-async function fetchPage(jobRef, token, startIndex, pageSize = PAGE_SIZE) {
-    const params = new URLSearchParams({
-        maxResults: String(pageSize),
-        startIndex: String(startIndex),
-    });
-    if (jobRef.location) {
-        params.set('location', jobRef.location);
-    }
-    const url = `${BQ_BASE}/projects/${encodeURIComponent(jobRef.projectId)}/queries/${encodeURIComponent(jobRef.jobId)}?${params.toString()}`;
-    return bqGet(url, token);
-}
-async function fetchTableMetadata(tableRef, token) {
-    const url = `${BQ_BASE}/projects/${encodeURIComponent(tableRef.projectId)}/datasets/${encodeURIComponent(tableRef.datasetId)}/tables/${encodeURIComponent(tableRef.tableId)}`;
-    return bqGet(url, token);
-}
-async function fetchTablePage(tableRef, token, startIndex, pageSize = PAGE_SIZE) {
-    const params = new URLSearchParams({
-        maxResults: String(pageSize),
-        startIndex: String(startIndex),
-    });
-    const url = `${BQ_BASE}/projects/${encodeURIComponent(tableRef.projectId)}/datasets/${encodeURIComponent(tableRef.datasetId)}/tables/${encodeURIComponent(tableRef.tableId)}/data?${params.toString()}`;
-    return bqGet(url, token);
-}
-async function fetchChildJobs(parent, token) {
-    const params = new URLSearchParams({
-        parentJobId: parent.jobId,
-        projection: 'full',
-        maxResults: '100',
-    });
-    if (parent.location) {
-        params.set('location', parent.location);
-    }
-    const url = `${BQ_BASE}/projects/${encodeURIComponent(parent.projectId)}/jobs?${params.toString()}`;
-    const res = await bqGet(url, token);
-    const jobs = (res.jobs || []).filter((j) => {
-        const t = j.statistics?.query?.statementType;
-        if (!t) {
-            return false;
-        }
-        return t === 'SELECT' || t === 'WITH' || t.startsWith('CREATE_') || t.startsWith('MERGE') || t === 'UPDATE' || t === 'INSERT' || t === 'DELETE';
-    });
-    return jobs.map((j) => ({
-        jobRef: {
-            projectId: j.jobReference.projectId,
-            jobId: j.jobReference.jobId,
-            location: j.jobReference.location,
-        },
-        statementType: j.statistics?.query?.statementType,
-        dmlStats: j.statistics?.query?.dmlStats,
-    }));
-}
 const DEFAULT_PAGE_SIZE = PAGE_SIZE;
 const pending = new Map();
 let nextRequestId = 1;

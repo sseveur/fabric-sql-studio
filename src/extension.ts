@@ -4,7 +4,6 @@ import { BigqueryAuthenticationWebviewViewProvider } from './activitybar/authent
 import { SqlTreeDataProvider } from './activitybar/sqlTreeDataProvider';
 import { SETTING_ACTIVE_CONNECTION, SETTING_CONNECTIONS, SETTING_PINNED_OBJECTS } from './services/connections';
 import * as commands from './extensionCommands';
-import { Authentication } from './services/authentication';
 import { WebviewViewProvider } from './tableResultsPanel/webviewViewProvider';
 import { BqsqlCompletionItemProvider } from './language/bqsqlCompletionItemProvider';
 import { BqsqlDocumentSemanticTokensProvider } from './language/bqsqlDocumentSemanticTokensProvider';
@@ -46,7 +45,6 @@ export function getExtensionUri(): Uri {
 export function activate(context: ExtensionContext) {
 
 	extensionUri = context.extensionUri;
-	Authentication.init(context.globalState);
 
 	let queryResultsWebviewMapping: Map<string, ResultsRender> = new Map<string, ResultsRender>();
 

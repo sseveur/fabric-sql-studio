@@ -1,29 +1,24 @@
 import * as vscode from 'vscode';
-import { BigQueryClient } from './services/bigqueryClient';
 import { clientFor, disposeAllClients } from './services/sqlServerClient';
-import { SqlResultMessage } from './tableResultsPanel/resultContract';
+import { SqlResultMessage, SqlClearMessage, SqlErrorMessage } from './tableResultsPanel/resultContract';
 import { clearSqlDiagnostics, reportSqlError, showQueryStatus } from './language/sqlDiagnostics';
 import { sqlTreeDataProvider, QUERY_RESULTS_VIEW_TYPE, TABLE_RESULTS_VIEW_TYPE, authenticationWebviewProvider, bigqueryTableSchemaService } from './extension';
-import { Authentication } from './services/authentication';
 import { describeToken, getAccessToken, SCOPE_FABRIC, SCOPE_TDS, signIn, signOut } from './services/auth';
 import { getActiveConnection, getConnection, getConnections, pinObject, setActiveConnection, unpinObject, SETTING_CONNECTIONS } from './services/connections';
 import { listSqlItems, listWorkspaces } from './services/fabricClient';
-import { connectionForDatabase, pickConnectionFor } from './services/queryRouter';
+import { pickConnectionFor } from './services/queryRouter';
 import { ConnectionRef, ObjectRef, displayName, qualifiedName, refToKey } from './services/objectRef';
 import { SchemaRender } from './tableResultsPanel/schemaRender';
 import { QueryGeneratorService } from './services/queryGeneratorService';
 import { ResultsGridRender } from './tableResultsPanel/resultsGridRender';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID as uuidv4 } from 'crypto';
 import { QueryResultsMappingService } from './services/queryResultsMappingService';
 import { QueryResultsMapping } from './services/queryResultsMapping';
 // import { JobReference } from "./services/queryResultsMapping";
-// import { TableReference } from './services/tableMetadata';
 import { ResultsRender } from './services/resultsRender';
 import { QueryResultsVisualizationType } from './services/queryResultsVisualizationType';
 import { ExportKind, exportSqlResult } from './tableResultsPanel/sqlExport';
 // import { Job } from '@google-cloud/bigquery';
-import { ResultsGridRenderRequestV2, ResultsGridRenderRequestV2Type } from './tableResultsPanel/resultsGridRenderRequestV2';
-import { Dataset, Table } from '@google-cloud/bigquery';
 import { formatBigQuerySQL, formatErrorSummary } from './language/bqsqlFormatter';
 import { renderRequestDetailsHtml } from './activitybar/jobDetailsPanel';
 import { formatEstimate, parsePlanEstimate, parsePlanStatements, prettyXml, renderPlanHtml } from './services/planEstimate';
@@ -35,6 +30,7 @@ import { showMultiLineagePanel } from './lineage/lineageWebviewProvider';
 import { runColumnProfileForTable } from './services/columnProfile';
 import { showColumnProfilePanel } from './tableResultsPanel/columnProfilePanel';
 import { resolveColumnAtPosition, ResolvedColumn, resolveTableAtPosition } from './services/columnResolver';
+import { connectionForDatabase } from './services/queryRouter';
 
 export const COMMAND_CLEAR_EXTENSION_CACHE = "vscode-bigquery.clear-extension-cache";
 export const COMMAND_RUN_QUERY = "vscode-bigquery.run-query";
@@ -180,19 +176,13 @@ export const commandProfileColumn = async function (this: any, ...args: any[]) {
 
 	const target = resolved;
 	const subtitle = `${target.database}.${target.schema}.${target.table}.${target.columnName} · ${target.columnType}`;
-	// ponytail: the profile SQL itself is still BigQuery-flavoured until M8 rewrites columnProfile.ts.
-	const bqClient = await getBigQueryClient();
+	const owner = (await connectionForDatabase(target.database)) ?? conn;
 
 	await vscode.window.withProgress(
 		{ location: vscode.ProgressLocation.Notification, title: `Profiling \`${target.columnName}\`…`, cancellable: false },
 		async () => {
 			try {
-				const profile = await runColumnProfileForTable(
-					bqClient,
-					{ projectId: target.database, datasetId: target.schema, tableId: target.table },
-					target.columnName,
-					target.columnType
-				);
+				const profile = await runColumnProfileForTable(owner, target, target.columnName, target.columnType);
 				showColumnProfilePanel(profile, subtitle);
 			} catch (err) {
 				vscode.window.showErrorMessage(`Profile failed: ${(err as Error).message || err}`);
@@ -518,10 +508,7 @@ function warnNoConnection(): void {
 // ---- T-SQL execution (Fabric Warehouse / Lakehouse SQL endpoint, Azure SQL, SQL Server) ----
 
 async function runSqlQuery(resultsGridRender: ResultsGridRender, conn: ConnectionRef, queryText: string, queryStartTime: number, recordHistory = true, documentUri?: vscode.Uri, routed = false): Promise<number> {
-	await resultsGridRender.postMessage({
-		requestType: ResultsGridRenderRequestV2Type.clear.toString(),
-		projectId: null, token: null, job: null, error: null
-	} as ResultsGridRenderRequestV2);
+	await resultsGridRender.postMessage({ requestType: 'clear' } as SqlClearMessage);
 
 	try {
 		const maxRows = vscode.workspace.getConfiguration('vscode-bigquery').get<number>('maxRows', 100000);
@@ -549,10 +536,9 @@ async function runSqlQuery(resultsGridRender: ResultsGridRender, conn: Connectio
 		reportSqlError(documentUri, errorx);
 		if (recordHistory) { showQueryStatus(`$(error) SQL error${errorx?.number ? ' ' + errorx.number : ''} · ${conn.id}`, message); }
 		await resultsGridRender.postMessage({
-			requestType: ResultsGridRenderRequestV2Type.error.toString(),
-			projectId: null, token: null, job: null,
+			requestType: 'error',
 			error: { message, reason: `${errorx?.number ? `SQL error ${errorx.number} · ` : ''}connection: ${conn.id}` }
-		} as ResultsGridRenderRequestV2);
+		} as SqlErrorMessage);
 		if (recordHistory) {
 			await queryHistoryService?.addEntry({
 				query: queryText, timestamp: queryStartTime, bytesProcessed: 0,
@@ -563,21 +549,8 @@ async function runSqlQuery(resultsGridRender: ResultsGridRender, conn: Connectio
 	}
 }
 
-let bigQueryClient: BigQueryClient | null;
-
-export const getBigQueryClient = async function (): Promise<BigQueryClient> {
-	if (!bigQueryClient) {
-		const t1 = Date.now();
-		const projectId = await Authentication.getDefaultProjectId();
-		bigQueryClient = new BigQueryClient(projectId);
-	}
-
-	return bigQueryClient;
-};
-
 const resetBigQueryClient = function () {
 	disposeAllClients();
-	bigQueryClient = null;
 };
 
 export const commandFormatQuery = async function () {

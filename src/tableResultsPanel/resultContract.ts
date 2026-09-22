@@ -49,3 +49,15 @@ export interface SqlPageRequest {
     startIndex: number;
     pageSize: number;
 }
+
+export interface SqlClearMessage {
+    requestType: 'clear';
+}
+
+export interface SqlErrorMessage {
+    requestType: 'error';
+    error: { message: string; reason: string | null };
+}
+
+/** Everything the host posts to the results grid. */
+export type GridHostMessage = SqlResultMessage | SqlPageResponse | SqlClearMessage | SqlErrorMessage;

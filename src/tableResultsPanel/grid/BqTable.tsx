@@ -642,19 +642,5 @@ function vs() {
 function postExport(command: string, ref: ExportRef) {
     const payload: any = { command };
     if (ref.sql) { payload.resultId = ref.sql.resultId; payload.setIndex = ref.sql.setIndex; }
-    if (ref.jobReference) {
-        payload.job_reference = {
-            projectId: ref.jobReference.projectId,
-            jobId: ref.jobReference.jobId,
-            location: ref.jobReference.location,
-        };
-    }
-    if (ref.tableReference) {
-        payload.table_reference = {
-            projectId: ref.tableReference.projectId,
-            datasetId: ref.tableReference.datasetId,
-            tableId: ref.tableReference.tableId,
-        };
-    }
     vs().postMessage(payload);
 }

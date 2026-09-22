@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { QueryResultsMappingService } from '../services/queryResultsMappingService';
 import { ResultsRender } from '../services/resultsRender';
 import { ResultsGridRender } from './resultsGridRender';
-import { ResultsGridRenderRequestV2, ResultsGridRenderRequestV2Type } from './resultsGridRenderRequestV2';
+import { SqlClearMessage } from './resultContract';
 
 export class QueryResultsSerializer implements vscode.WebviewPanelSerializer {
 
@@ -45,11 +45,5 @@ export class QueryResultsSerializer implements vscode.WebviewPanelSerializer {
  * query lands in this panel again.
  */
 let loadComplete = async function (resultsGridRender: ResultsGridRender, _state: any): Promise<void> {
-    await resultsGridRender.postMessage({
-        requestType: ResultsGridRenderRequestV2Type.clear.toString(),
-        projectId: null,
-        token: null,
-        job: null,
-        error: null
-    } as ResultsGridRenderRequestV2);
+    await resultsGridRender.postMessage({ requestType: 'clear' } as SqlClearMessage);
 };
