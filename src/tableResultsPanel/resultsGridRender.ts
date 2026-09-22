@@ -48,11 +48,7 @@ export class ResultsGridRender {
     public static executeCommand(c: any) {
         if ((c as any).command) {
             const command = (c as any).command;
-            const data = {
-                tableReference: (c as any).table_reference,
-                jobReference: (c as any).job_reference,
-                command: command,
-            };
+            const data = { command, resultId: (c as any).resultId, setIndex: (c as any).setIndex };
 
             switch (command) {
                 case "download_csv": { vscode.commands.executeCommand(COMMAND_DOWNLOAD_CSV, data); break; }

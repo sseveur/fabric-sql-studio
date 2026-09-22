@@ -42,6 +42,8 @@ export interface TableReference {
 export interface ExportRef {
     jobReference?: JobReference;
     tableReference?: TableReference;
+    /** Host-held T-SQL result set. */
+    sql?: { resultId: string; setIndex: number };
 }
 
 export interface QueryResultsResponse {

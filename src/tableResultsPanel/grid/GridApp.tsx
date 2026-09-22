@@ -137,7 +137,6 @@ function BqTableHost({ view }: { view: TableView }) {
             dmlStats={view.dmlStats}
             statementType={view.statementType}
             rowsAffected={view.rowsAffected}
-            onExport={source.kind === 'sql' ? null : undefined}
         />
     );
 }
@@ -253,7 +252,7 @@ function viewFromSqlResult(msg: SqlResultMessage): View {
     const many = msg.sets.length > 1;
     const tables: TableView[] = msg.sets.map(set => ({
         key: `sql-${msg.resultId}-${set.index}`,
-        exportRef: {},
+        exportRef: { sql: { resultId: msg.resultId, setIndex: set.index } },
         schema: set.columns.map((c): BqField => ({ name: c.name, type: c.type, mode: c.nullable ? 'NULLABLE' : 'REQUIRED' })),
         totalRows: set.rows.length,
         initialRows: set.rows.map(toWireRow),

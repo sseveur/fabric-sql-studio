@@ -14,15 +14,13 @@ import { SchemaRender } from './tableResultsPanel/schemaRender';
 import { QueryGeneratorService } from './services/queryGeneratorService';
 import { ResultsGridRender } from './tableResultsPanel/resultsGridRender';
 import { v4 as uuidv4 } from 'uuid';
-import { DownloadCsv } from './tableResultsPanel/downloadCsv';
 import { QueryResultsMappingService } from './services/queryResultsMappingService';
 import { QueryResultsMapping } from './services/queryResultsMapping';
 // import { JobReference } from "./services/queryResultsMapping";
 // import { TableReference } from './services/tableMetadata';
 import { ResultsRender } from './services/resultsRender';
 import { QueryResultsVisualizationType } from './services/queryResultsVisualizationType';
-import { DownloadJsonl } from './tableResultsPanel/downloadJsonl';
-import { CopyToClipboard } from './tableResultsPanel/copyToClipboard';
+import { ExportKind, exportSqlResult } from './tableResultsPanel/sqlExport';
 // import { Job } from '@google-cloud/bigquery';
 import { ResultsGridRenderRequestV2, ResultsGridRenderRequestV2Type } from './tableResultsPanel/resultsGridRenderRequestV2';
 import { Dataset, Table } from '@google-cloud/bigquery';
@@ -452,156 +450,18 @@ export const commandSetDefaultProject = async function (...args: any[]) {
 	vscode.commands.executeCommand(COMMAND_EXPLORER_REFRESH);
 };
 
-export const commandDownloadCsv = async function (this: any, ...args: any[]) {
+/** Export buttons of the results grid. Payload: `{ command, resultId, setIndex }` from the webview. */
+export const commandDownloadCsv = async function (...args: any[]) { await exportFromPayload('csv', args[0]); };
+export const commandDownloadJsonl = async function (...args: any[]) { await exportFromPayload('jsonl', args[0]); };
+export const commandCopyToClipboard = async function (...args: any[]) { await exportFromPayload('clipboard', args[0]); };
 
-	if (args.length > 0) {
-
-		let data = args[0];
-		if (data.command === "download_csv") {
-
-			if (data.jobReference || data.tableReference) {
-
-				const bqClient = await getBigQueryClient();
-
-				if (data.jobReference) {
-					let jobReference = data.jobReference;
-					await DownloadCsv.download(bqClient, jobReference);
-				} else {
-					let tableReference = data.tableReference;
-
-					const table = bqClient.getTable(tableReference.projectId, tableReference.datasetId, tableReference.tableId);
-
-
-					await DownloadCsv.downloadTable(bqClient, table);
-				}
-			}
-
-		}
-
+async function exportFromPayload(kind: ExportKind, data: any): Promise<void> {
+	if (typeof data?.resultId !== 'string') {
+		vscode.window.showWarningMessage('Run a query first, then use the export buttons on its results.');
+		return;
 	}
-
-	// const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
-
-	// if (activeTab === undefined || activeTab.input === undefined) {
-	// 	return;
-	// }
-	// const bqClient = await getBigQueryClient();
-
-	// const viewType = ((activeTab.input as any).viewType as string);
-	// if (viewType?.endsWith('-bigquery-query-results')) {
-
-	// 	const uuid = activeTab.label.substring(activeTab.label.length - 8);
-
-	// 	const globalState: vscode.Memento = this.globalState;
-	// 	let queryResultsMapping: QueryResultsMapping[] | undefined = globalState.get('queryResultsMapping');
-	// 	if (queryResultsMapping) {
-
-	// 		const item = queryResultsMapping.find(c => c.uuid === uuid);
-	// 		if (item && item.jobReferences && item.jobIndex !== undefined) {
-	// 			await DownloadCsv.download(bqClient, item.jobReferences[item.jobIndex]);
-	// 		}
-	// 	}
-	// } else {
-	// 	if (viewType?.endsWith('-bigquery-table-results')) {
-
-	// 		const tableId = activeTab.label.split('.');
-	// 		const table = bqClient.getTable(tableId[0], tableId[1], tableId[2]);
-
-	// 		await DownloadCsv.downloadTable(bqClient, table);
-
-	// 	}
-	// }
-
-
-};
-
-export const commandDownloadJsonl = async function (this: any, ...args: any[]) {
-
-	if (args.length > 0) {
-
-		let data = args[0];
-		if (data.command === "download_jsonl") {
-
-			if (data.jobReference || data.tableReference) {
-
-				const bqClient = await getBigQueryClient();
-
-				if (data.jobReference) {
-					let jobReference = data.jobReference;
-					await DownloadJsonl.download(bqClient, jobReference);
-				} else {
-					let tableReference = data.tableReference;
-
-					const table = bqClient.getTable(tableReference.projectId, tableReference.datasetId, tableReference.tableId);
-
-
-					await DownloadJsonl.downloadTable(bqClient, table);
-				}
-			}
-
-
-			// const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
-
-			// if (activeTab === undefined || activeTab.input === undefined) {
-			// 	return;
-			// }
-
-			// const viewType = ((activeTab.input as any).viewType as string);
-			// const bqClient = await getBigQueryClient();
-
-			// if (viewType?.endsWith('-bigquery-query-results')) {
-
-			// 	const uuid = activeTab.label.substring(activeTab.label.length - 8);
-
-			// 	const globalState: vscode.Memento = this.globalState;
-			// 	let queryResultsMapping: QueryResultsMapping[] | undefined = globalState.get('queryResultsMapping');
-			// 	if (queryResultsMapping) {
-
-			// 		const item = queryResultsMapping.find(c => c.uuid === uuid);
-			// 		if (item && item.jobReferences && item.jobIndex !== undefined) {
-			// 			await DownloadJsonl.download(bqClient, item.jobReferences[item.jobIndex]);
-			// 		}
-			// 	}
-			// } else {
-			// 	if (viewType?.endsWith('-bigquery-table-results')) {
-
-			// 		const tableId = activeTab.label.split('.');
-			// 		const table = bqClient.getTable(tableId[0], tableId[1], tableId[2]);
-
-			// 		await DownloadJsonl.downloadTable(bqClient, table);
-
-			// 	}
-			// }
-
-		}
-	}
-};
-
-export const commandCopyToClipboard = async function (this: any, ...args: any[]) {
-
-	if (args.length > 0) {
-
-		let data = args[0];
-		if (data.command === "copy_to_clipboard") {
-
-			if (data.jobReference || data.tableReference) {
-
-				const bqClient = await getBigQueryClient();
-
-				if (data.jobReference) {
-					let jobReference = data.jobReference;
-					await CopyToClipboard.copy(bqClient, jobReference);
-				} else {
-					let tableReference = data.tableReference;
-
-					const table = bqClient.getTable(tableReference.projectId, tableReference.datasetId, tableReference.tableId);
-
-					await CopyToClipboard.copyTable(bqClient, table);
-				}
-			}
-		}
-	}
-};
+	await exportSqlResult(kind, data.resultId, Number(data.setIndex) || 0);
+}
 
 export const commandOpenSettingConnections = async function () {
 	vscode.commands.executeCommand('workbench.action.openSettings', SETTING_CONNECTIONS);

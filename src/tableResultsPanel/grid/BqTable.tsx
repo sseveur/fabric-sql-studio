@@ -440,7 +440,7 @@ export function BqTable({ fetchRows, exportRef, schema, totalRows, initialRows, 
                             {onExport && <>
                                 <button class="bq-pg-btn" onClick={() => onExport('download_csv', exportRef)} title="Download all as CSV">CSV</button>
                                 <button class="bq-pg-btn" onClick={() => onExport('download_jsonl', exportRef)} title="Download all as JSONL">JSONL</button>
-                                <button class="bq-pg-btn" onClick={() => onExport('copy_to_clipboard', exportRef)} title="Copy all as Markdown">Copy</button>
+                                <button class="bq-pg-btn" onClick={() => onExport('copy_to_clipboard', exportRef)} title="Copy all as CSV">Copy</button>
                             </>}
                         </div>
                     )}
@@ -641,6 +641,7 @@ function vs() {
 }
 function postExport(command: string, ref: ExportRef) {
     const payload: any = { command };
+    if (ref.sql) { payload.resultId = ref.sql.resultId; payload.setIndex = ref.sql.setIndex; }
     if (ref.jobReference) {
         payload.job_reference = {
             projectId: ref.jobReference.projectId,

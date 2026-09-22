@@ -23,10 +23,14 @@ export type SqlConnectionTarget = Pick<ConnectionRef, 'server' | 'database' | 'p
 const results = new Map<string, QueryResult>();
 const MAX_KEPT_RESULTS = 20;
 
-export function getResultPage(resultId: string, setIndex: number, startIndex: number, pageSize: number): unknown[][] {
+export function getResultSet(resultId: string, setIndex: number): SqlResultSet {
     const set = results.get(resultId)?.sets[setIndex];
     if (!set) { throw new Error('Result set is no longer available; re-run the query.'); }
-    return set.rows.slice(startIndex, startIndex + pageSize);
+    return set;
+}
+
+export function getResultPage(resultId: string, setIndex: number, startIndex: number, pageSize: number): unknown[][] {
+    return getResultSet(resultId, setIndex).rows.slice(startIndex, startIndex + pageSize);
 }
 
 export class SqlServerClient {
