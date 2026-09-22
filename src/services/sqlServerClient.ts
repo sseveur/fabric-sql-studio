@@ -63,7 +63,7 @@ export class SqlServerClient {
         return this.pool;
     }
 
-    public async runQuery(text: string, maxRows: number): Promise<QueryResult> {
+    public async runQuery(text: string, maxRows: number, onRequest?: (cancel: () => void) => void): Promise<QueryResult> {
         const pool = await this.getPool();
         const started = Date.now();
         const sets: SqlResultSet[] = [];
@@ -101,6 +101,7 @@ export class SqlServerClient {
                 const truncatedOnly = failed && sets.some(s => s.truncated) && /cancel/i.test(failed.message);
                 if (failed && !truncatedOnly) { reject(failed); } else { resolve(); }
             });
+            onRequest?.(() => request.cancel());
             request.batch(text);
         });
 

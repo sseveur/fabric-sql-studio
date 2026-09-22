@@ -1,6 +1,6 @@
 import { render } from 'preact';
 import { BqTable, type PageFetcher } from '../../tableResultsPanel/grid/BqTable';
-import type { BqField, DmlStats, ExportRef, JobReference } from '../../tableResultsPanel/grid/types';
+import type { BqField, ExportRef } from '../../tableResultsPanel/grid/types';
 // Bundled as a raw string by webpack (asset/source). Shared stylesheet with the webview grid so
 // the notebook cell renders identically to the results panel.
 // @ts-ignore - no module typings; webpack provides the file contents as a string.
@@ -13,19 +13,22 @@ import gridCssText from '../../../resources/grid-v2.css';
  */
 export const GRID_MIME = 'application/vnd.bigquery.grid+json';
 
-/** Payload the controller emits per executed cell (see bqSqlNotebookController.executeCell). */
+/** Payload the controller emits per result set (see bqSqlNotebookController.cellPayload). */
 interface CellPayload {
-    rows: Array<{ f: Array<{ v: any }> }>;   // raw BigQuery wire format
+    rows: Array<{ f: Array<{ v: any }> }>;   // positional rows wrapped as { f: [{ v }] } for the grid
     fields: BqField[];
-    totalRows: number;       // real total row count of the result (may exceed loaded)
+    totalRows: number;       // rows the host holds (may exceed loaded)
+    serverRows?: number;     // rows the server produced (> totalRows when truncated at maxRows)
+    truncated?: boolean;
     previewedRows: number;   // rows actually loaded into this output
-    bytesProcessed: number;
     durationMs: number;
-    dmlStats?: DmlStats;
+    rowsAffected?: number;
     statementType?: string;
-    jobReference?: JobReference;
+    sql?: SqlRef;            // host-held result set to page / export from
     colors?: Record<string, string>;   // sanitized { --bq-color-*: value } overrides
 }
+
+type SqlRef = { resultId: string; setIndex: number };
 
 /** Minimal shape of the VS Code notebook renderer OutputItem (avoids a types dependency). */
 interface OutputItem {
@@ -64,19 +67,11 @@ function injectStyles(): void {
     stylesInjected = true;
 }
 
-function formatBytes(bytes: number): string {
-    if (!bytes || bytes <= 0) { return '0 B'; }
-    const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-    const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
-    const value = bytes / Math.pow(1024, i);
-    return `${i === 0 ? value : value.toFixed(2)} ${units[i]}`;
-}
-
 /** Asks the extension host for a page beyond the loaded window (load-more). */
-type PageRequester = (job: JobReference, startIndex: number, pageSize: number) => Promise<Array<{ f: Array<{ v: any }> }>>;
+type PageRequester = (sql: SqlRef, startIndex: number, pageSize: number) => Promise<Array<{ f: Array<{ v: any }> }>>;
 
 /** Fire-and-forget export request routed to the extension host (dialogs/fs live there). */
-type ExportRequester = (command: string, job: JobReference) => void;
+type ExportRequester = (command: string, sql: SqlRef) => void;
 
 function NotebookGrid({ payload, requestPage, requestExport }: {
     payload: CellPayload;
@@ -89,25 +84,26 @@ function NotebookGrid({ payload, requestPage, requestExport }: {
     // Only advertise more pages than are loaded when we can actually fetch them (messaging up +
     // we have a job to page against). Otherwise cap the grid to the loaded window so it never
     // offers a page it can't fill.
-    const canFetchMore = !!requestPage && !!payload.jobReference && realTotal > loaded;
+    const canFetchMore = !!requestPage && !!payload.sql && realTotal > loaded;
     const gridTotal = canFetchMore ? realTotal : loaded;
 
     const fetchRows: PageFetcher = (start, size) => {
         // Serve from the in-memory window when the page is fully covered (no round-trip).
-        if (start + size <= loaded || !canFetchMore || !payload.jobReference) {
+        if (start + size <= loaded || !canFetchMore || !payload.sql) {
             return Promise.resolve({ rows: allRows.slice(start, start + size), totalRows: String(gridTotal) });
         }
-        return requestPage!(payload.jobReference, start, size)
+        return requestPage!(payload.sql, start, size)
             .then(rows => ({ rows, totalRows: String(gridTotal) }));
     };
 
-    const exportRef: ExportRef = payload.jobReference ? { jobReference: payload.jobReference } : {};
-    // Grid export buttons post over renderer messaging; without messaging or a job there is no
-    // export channel, so the buttons hide (null) rather than sit dead.
-    const onExport = requestExport && payload.jobReference
-        ? (command: string) => requestExport(command, payload.jobReference!)
+    const exportRef: ExportRef = payload.sql ? { sql: payload.sql } : {};
+    // Grid export buttons post over renderer messaging; without messaging or a result ref there is
+    // no export channel, so the buttons hide (null) rather than sit dead.
+    const onExport = requestExport && payload.sql
+        ? (command: string) => requestExport(command, payload.sql!)
         : null;
     const truncated = realTotal > loaded && !canFetchMore;
+    const capped = payload.truncated && payload.serverRows !== undefined;
     // Per-type cell colors from the vscode-bigquery.gridColors setting, scoped to this grid. Applied
     // via setProperty (not a style string) so CSS custom properties are set reliably.
     const applyColors = (node: HTMLElement | null) => {
@@ -118,11 +114,11 @@ function NotebookGrid({ payload, requestPage, requestExport }: {
     return (
         <div class="bq-nb-grid" ref={applyColors}>
             <div class="bq-nb-stats" style="opacity:.7;font-size:11px;margin:4px 2px;font-family:var(--vscode-editor-font-family,monospace);">
-                {/* "0 rows" is noise on a DML result — the banner carries the affected counts. */}
-                {payload.dmlStats && realTotal === 0 ? '' : `${realTotal.toLocaleString()} rows · `}
-                {formatBytes(payload.bytesProcessed)} processed
-                {' · '}{payload.durationMs.toLocaleString()} ms
+                {/* "0 rows" is noise on a DML result — the banner carries the affected count. */}
+                {payload.rowsAffected !== undefined && realTotal === 0 ? '' : `${realTotal.toLocaleString()} rows · `}
+                {payload.durationMs.toLocaleString()} ms
                 {truncated ? ` · showing first ${loaded.toLocaleString()} of ${realTotal.toLocaleString()}` : ''}
+                {capped ? ` · server returned ${payload.serverRows!.toLocaleString()}+ rows, kept the first ${realTotal.toLocaleString()} (maxRows)` : ''}
             </div>
             <BqTable
                 fetchRows={fetchRows}
@@ -130,7 +126,7 @@ function NotebookGrid({ payload, requestPage, requestExport }: {
                 schema={payload.fields || []}
                 totalRows={gridTotal}
                 initialRows={allRows}
-                dmlStats={payload.dmlStats}
+                rowsAffected={payload.rowsAffected}
                 statementType={payload.statementType}
                 onExport={onExport}
             />
@@ -155,10 +151,10 @@ export function activate(context: RendererContext) {
     }
 
     const requestPage: PageRequester | null = canMessage
-        ? (job, startIndex, pageSize) => new Promise((resolve, reject) => {
+        ? (sql, startIndex, pageSize) => new Promise((resolve, reject) => {
             const requestId = `bq-${++reqSeq}`;
             pending.set(requestId, { resolve, reject });
-            context.postMessage!({ type: 'bq-fetch-page', requestId, job, startIndex, pageSize });
+            context.postMessage!({ type: 'bq-fetch-page', requestId, sql, startIndex, pageSize });
             setTimeout(() => {
                 if (pending.has(requestId)) {
                     pending.delete(requestId);
@@ -171,7 +167,7 @@ export function activate(context: RendererContext) {
     // Fire-and-forget: the extension host runs the export (save dialog, clipboard)
     // and surfaces its own progress/error notifications — nothing to await here.
     const requestExport: ExportRequester | null = canMessage
-        ? (command, job) => context.postMessage!({ type: 'bq-export', command, job })
+        ? (command, sql) => context.postMessage!({ type: 'bq-export', command, sql })
         : null;
 
     return {

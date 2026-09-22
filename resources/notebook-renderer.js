@@ -1418,15 +1418,6 @@ function injectStyles() {
     document.head.appendChild(style);
     stylesInjected = true;
 }
-function formatBytes(bytes) {
-    if (!bytes || bytes <= 0) {
-        return '0 B';
-    }
-    const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-    const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
-    const value = bytes / Math.pow(1024, i);
-    return `${i === 0 ? value : value.toFixed(2)} ${units[i]}`;
-}
 function NotebookGrid({ payload, requestPage, requestExport }) {
     const allRows = payload.rows || [];
     const loaded = allRows.length;
@@ -1434,23 +1425,24 @@ function NotebookGrid({ payload, requestPage, requestExport }) {
     // Only advertise more pages than are loaded when we can actually fetch them (messaging up +
     // we have a job to page against). Otherwise cap the grid to the loaded window so it never
     // offers a page it can't fill.
-    const canFetchMore = !!requestPage && !!payload.jobReference && realTotal > loaded;
+    const canFetchMore = !!requestPage && !!payload.sql && realTotal > loaded;
     const gridTotal = canFetchMore ? realTotal : loaded;
     const fetchRows = (start, size) => {
         // Serve from the in-memory window when the page is fully covered (no round-trip).
-        if (start + size <= loaded || !canFetchMore || !payload.jobReference) {
+        if (start + size <= loaded || !canFetchMore || !payload.sql) {
             return Promise.resolve({ rows: allRows.slice(start, start + size), totalRows: String(gridTotal) });
         }
-        return requestPage(payload.jobReference, start, size)
+        return requestPage(payload.sql, start, size)
             .then(rows => ({ rows, totalRows: String(gridTotal) }));
     };
-    const exportRef = payload.jobReference ? { jobReference: payload.jobReference } : {};
-    // Grid export buttons post over renderer messaging; without messaging or a job there is no
-    // export channel, so the buttons hide (null) rather than sit dead.
-    const onExport = requestExport && payload.jobReference
-        ? (command) => requestExport(command, payload.jobReference)
+    const exportRef = payload.sql ? { sql: payload.sql } : {};
+    // Grid export buttons post over renderer messaging; without messaging or a result ref there is
+    // no export channel, so the buttons hide (null) rather than sit dead.
+    const onExport = requestExport && payload.sql
+        ? (command) => requestExport(command, payload.sql)
         : null;
     const truncated = realTotal > loaded && !canFetchMore;
+    const capped = payload.truncated && payload.serverRows !== undefined;
     // Per-type cell colors from the vscode-bigquery.gridColors setting, scoped to this grid. Applied
     // via setProperty (not a style string) so CSS custom properties are set reliably.
     const applyColors = (node) => {
@@ -1461,7 +1453,7 @@ function NotebookGrid({ payload, requestPage, requestExport }) {
             node.style.setProperty(k, v);
         }
     };
-    return ((0,preact_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { class: "bq-nb-grid", ref: applyColors, children: [(0,preact_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { class: "bq-nb-stats", style: "opacity:.7;font-size:11px;margin:4px 2px;font-family:var(--vscode-editor-font-family,monospace);", children: [payload.dmlStats && realTotal === 0 ? '' : `${realTotal.toLocaleString()} rows · `, formatBytes(payload.bytesProcessed), " processed", ' · ', payload.durationMs.toLocaleString(), " ms", truncated ? ` · showing first ${loaded.toLocaleString()} of ${realTotal.toLocaleString()}` : ''] }), (0,preact_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_tableResultsPanel_grid_BqTable__WEBPACK_IMPORTED_MODULE_2__.BqTable, { fetchRows: fetchRows, exportRef: exportRef, schema: payload.fields || [], totalRows: gridTotal, initialRows: allRows, dmlStats: payload.dmlStats, statementType: payload.statementType, onExport: onExport })] }));
+    return ((0,preact_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { class: "bq-nb-grid", ref: applyColors, children: [(0,preact_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { class: "bq-nb-stats", style: "opacity:.7;font-size:11px;margin:4px 2px;font-family:var(--vscode-editor-font-family,monospace);", children: [payload.rowsAffected !== undefined && realTotal === 0 ? '' : `${realTotal.toLocaleString()} rows · `, payload.durationMs.toLocaleString(), " ms", truncated ? ` · showing first ${loaded.toLocaleString()} of ${realTotal.toLocaleString()}` : '', capped ? ` · server returned ${payload.serverRows.toLocaleString()}+ rows, kept the first ${realTotal.toLocaleString()} (maxRows)` : ''] }), (0,preact_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_tableResultsPanel_grid_BqTable__WEBPACK_IMPORTED_MODULE_2__.BqTable, { fetchRows: fetchRows, exportRef: exportRef, schema: payload.fields || [], totalRows: gridTotal, initialRows: allRows, rowsAffected: payload.rowsAffected, statementType: payload.statementType, onExport: onExport })] }));
 }
 function activate(context) {
     const canMessage = !!(context && typeof context.postMessage === 'function');
@@ -1486,10 +1478,10 @@ function activate(context) {
         });
     }
     const requestPage = canMessage
-        ? (job, startIndex, pageSize) => new Promise((resolve, reject) => {
+        ? (sql, startIndex, pageSize) => new Promise((resolve, reject) => {
             const requestId = `bq-${++reqSeq}`;
             pending.set(requestId, { resolve, reject });
-            context.postMessage({ type: 'bq-fetch-page', requestId, job, startIndex, pageSize });
+            context.postMessage({ type: 'bq-fetch-page', requestId, sql, startIndex, pageSize });
             setTimeout(() => {
                 if (pending.has(requestId)) {
                     pending.delete(requestId);
@@ -1501,7 +1493,7 @@ function activate(context) {
     // Fire-and-forget: the extension host runs the export (save dialog, clipboard)
     // and surfaces its own progress/error notifications — nothing to await here.
     const requestExport = canMessage
-        ? (command, job) => context.postMessage({ type: 'bq-export', command, job })
+        ? (command, sql) => context.postMessage({ type: 'bq-export', command, sql })
         : null;
     return {
         renderOutputItem(outputItem, element) {

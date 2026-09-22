@@ -24,8 +24,6 @@ import { QueryHistoryTreeDataProvider } from './activitybar/queryHistoryTreeData
 import { JobHistoryTreeDataProvider } from './activitybar/jobHistoryTreeDataProvider';
 import { BqSqlNotebookSerializer, NOTEBOOK_TYPE } from './notebook/bqSqlNotebookSerializer';
 import { BqSqlNotebookController } from './notebook/bqSqlNotebookController';
-import { CellRegistry, runCellRegistryMigration } from './notebook/bqSqlNotebookCellRegistry';
-import { registerNotebookPersistence } from './notebook/bqSqlNotebookPersistence';
 
 export const bigqueryWebviewViewProvider = new WebviewViewProvider();
 export const authenticationWebviewProvider = new BigqueryAuthenticationWebviewViewProvider();
@@ -324,14 +322,12 @@ export function activate(context: ExtensionContext) {
 	const queryHistoryTreeDataProvider = new QueryHistoryTreeDataProvider(queryHistoryService);
 
 	// Notebook mode: SQL files as notebooks with inline results
-	void runCellRegistryMigration(context.globalState);
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
 			commands.COMMAND_CLEAR_EXTENSION_CACHE,
 			commands.commandClearExtensionCache(context.globalState)
 		)
 	);
-	const cellRegistry = new CellRegistry(context.globalState);
 
 	context.subscriptions.push(
 		vscode.workspace.registerNotebookSerializer(
@@ -340,10 +336,9 @@ export function activate(context: ExtensionContext) {
 			{ transientOutputs: true }
 		)
 	);
-	const notebookController = new BqSqlNotebookController(cellRegistry, queryHistoryService);
+	const notebookController = new BqSqlNotebookController(queryHistoryService);
 	context.subscriptions.push(notebookController);
 
-	registerNotebookPersistence(context, cellRegistry);
 
 	context.subscriptions.push(
 		vscode.window.registerTreeDataProvider(
