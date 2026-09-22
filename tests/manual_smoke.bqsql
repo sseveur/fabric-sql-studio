@@ -1,0 +1,53 @@
+-- 1. Plain preview (routing: database named → Zim_LH_Dev profile)
+SELECT TOP 100
+	*
+FROM [Zim_LH_Silver_Dev].[OMNEO].[MRT_PROFILES];
+
+-- 2. CTE chain: Preview CTE lens on each, hover a CTE name for its columns,
+--    Show Lineage should draw MRT_PROFILES → by_type → ranked → SELECT Result
+WITH by_type AS (
+	SELECT
+		p.profile_type,
+		p.profile_gender,
+		n = COUNT(*)
+	FROM [Zim_LH_Silver_Dev].[OMNEO].[MRT_PROFILES] AS p
+	GROUP BY p.profile_type, p.profile_gender
+), ranked (profile_type, profile_gender, n, rn) AS (
+	SELECT
+		profile_type,
+		profile_gender,
+		n,
+		ROW_NUMBER() OVER (PARTITION BY profile_type ORDER BY n DESC)
+	FROM by_type
+)
+SELECT *
+FROM ranked
+WHERE rn <= 3
+ORDER BY profile_type, rn;
+
+-- 3. Join across two databases in the same workspace
+--    Preview Table at cursor on `a` / `[dimAssociate_ref]`; Profile Column on p.profile_currency
+SELECT TOP 50
+	p.profile_id,
+	p.profile_currency,
+	a.*
+FROM [Zim_LH_Silver_Dev].[OMNEO].[MRT_PROFILES] p
+LEFT JOIN [Zim_WH_Gold_Dev].[common].[dimAssociate_ref] a
+	ON a.associate_id = p.profile_id;
+
+-- 4. Multi-result batch + rowsAffected banner: semicolon inside a string must not split
+SELECT 'a;b' AS s, 1 AS n;
+SELECT GETDATE() AS now_utc, SYSTEM_USER AS who;
+
+-- 5. Estimated plan target: aggregate + window, no execution
+SELECT
+	profile_gender,
+	COUNT(*) AS n,
+	AVG(CAST(LEN(profile_id) AS float)) AS avg_id_len
+FROM [Zim_LH_Silver_Dev].[OMNEO].[MRT_PROFILES]
+GROUP BY profile_gender
+HAVING COUNT(*) > 10;
+
+-- 6. Deliberate error: line number in Problems should point here
+SELECT nope_column
+FROM [Zim_LH_Silver_Dev].[OMNEO].[MRT_PROFILES];

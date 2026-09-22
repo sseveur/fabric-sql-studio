@@ -32,3 +32,5 @@ previous_packages/**
 new_features/**
 call.txt
 documentation/Untitled.png
+# Manual test queries
+tests/**
