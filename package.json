@@ -821,7 +821,7 @@
 			"view/item/context": [
 				{
 					"command": "fabricSql.job-history-details",
-					"when": "viewItem == 'job-history-job'",
+					"when": "viewItem == 'fsql-job-history-job'",
 					"group": "inline"
 				},
 				{
@@ -861,17 +861,17 @@
 				},
 				{
 					"command": "fabricSql.history-rerun",
-					"when": "viewItem == 'history-query'",
+					"when": "viewItem == 'fsql-history-query'",
 					"group": "inline"
 				},
 				{
 					"command": "fabricSql.history-copy",
-					"when": "viewItem == 'history-query'",
+					"when": "viewItem == 'fsql-history-query'",
 					"group": "inline"
 				},
 				{
 					"command": "fabricSql.history-delete",
-					"when": "viewItem == 'history-query'",
+					"when": "viewItem == 'fsql-history-query'",
 					"group": "inline"
 				}
 			]

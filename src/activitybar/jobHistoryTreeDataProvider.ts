@@ -115,7 +115,7 @@ export class JobHistoryTreeItem extends vscode.TreeItem {
         if (type === 'job' && entry) {
             this.iconPath = iconFor(entry);
             this.description = jobEntryDescription(entry);
-            this.contextValue = 'job-history-job';
+            this.contextValue = 'fsql-job-history-job';
             this.tooltip = buildTooltip(entry);
             this.command = { command: 'fabricSql.job-history-show', title: 'Show Request', arguments: [this] };
         } else if (type === 'more') {

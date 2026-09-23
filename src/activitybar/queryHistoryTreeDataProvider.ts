@@ -96,7 +96,7 @@ export class QueryHistoryTreeItem extends vscode.TreeItem {
             const isSuccess = historyItem.status === 'success';
             this.iconPath = new vscode.ThemeIcon(isSuccess ? 'check' : 'error',
                 isSuccess ? undefined : new vscode.ThemeColor('errorForeground'));
-            this.contextValue = 'history-query';
+            this.contextValue = 'fsql-history-query';
 
             // Description shows bytes and duration
             const bytesStr = formatBytes(historyItem.bytesProcessed);

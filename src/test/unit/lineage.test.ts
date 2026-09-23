@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { extractCteColumns, extractCtes, getCteNames } from '../../services/cteExtractor';
 import { extractCtePreviews } from '../../services/ctePreview';
-import { chainAt, resolveColumnAtPosition, resolveTableAtPosition } from '../../services/columnResolver';
+import { chainAt, resolveColumnAtPosition, resolveCteAtPosition, resolveTableAtPosition } from '../../services/columnResolver';
 import { extractLineage } from '../../services/lineageService';
 import { splitQueries } from '../../services/querySplitter';
 import { extractTableReferences } from '../../services/sqlTableExtractor';
@@ -78,6 +78,13 @@ suite('lineage on the T-SQL parser', () => {
         assert.deepStrictEqual(resolveTableAtPosition(SQL, at('c.name'), 'X'), { database: 'X', schema: 'dbo', table: 'Customers' });
         assert.deepStrictEqual(chainAt(SQL, at('[dbo].[Orders]')), ['Sales', 'dbo', 'Orders']);
         assert.strictEqual(resolveTableAtPosition(SQL, at('SELECT o.id'), 'X'), null);
+    });
+
+    test('resolveCteAtPosition: CTE name or its alias, null for real tables', () => {
+        const sql = 'WITH ranked AS (SELECT 1 x)\nSELECT r.x FROM ranked r JOIN dbo.T t ON 1 = 1';
+        assert.strictEqual(resolveCteAtPosition(sql, sql.indexOf('ranked r') + 1), 'ranked');
+        assert.strictEqual(resolveCteAtPosition(sql, sql.indexOf('ranked r') + 8), 'ranked');
+        assert.strictEqual(resolveCteAtPosition(sql, sql.indexOf('dbo.T') + 5), null);
     });
 
     test('resolveColumnAtPosition: alias lookup, unambiguous bare column, ambiguity error', async () => {

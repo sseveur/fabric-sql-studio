@@ -113,13 +113,36 @@ export function chainAt(sql: string, offset: number): string[] | null {
     return toks.slice(lo, hi + 1).filter(t => t.kind === 'ident').map(t => unquotePart(t.text));
 }
 
-function tablesInScope(sql: string, offset: number, defaultDatabase: string | undefined): TableInScope[] {
+/**
+ * CTE named or aliased at the cursor (`FROM ranked r` → cursor on `ranked` or `r` gives `ranked`),
+ * for the statement around the cursor. Null when the identifier is not a CTE.
+ */
+export function resolveCteAtPosition(sql: string, offset: number): string | null {
+    const parts = chainAt(sql, offset);
+    if (!parts || parts.length !== 1) { return null; }
+    const word = parts[0].toLowerCase();
+    for (const id of identifiersInScope(sql, offset)) {
+        const chain = id.items.find(c => c.item_type === 'TableCteId');
+        if (!chain) { continue; }
+        const name = unquotePart(textAt(sql, chain.range));
+        const aliasItem = id.items.find(c => c.item_type === 'TableIdentifierAlias');
+        const alias = aliasItem ? unquotePart(textAt(sql, aliasItem.range)) : name;
+        if (name.toLowerCase() === word || alias.toLowerCase() === word) { return name; }
+    }
+    return null;
+}
+
+/** TableIdentifier nodes of the top-level statement containing the cursor (whole document as fallback). */
+function identifiersInScope(sql: string, offset: number): FsqlDocumentItem[] {
     const doc = parse(sql);
     const line = lineOffsets(sql).filter(o => o <= offset).length - 1;
     const stmt = doc.items.find(it => { const ls = leafLines(it); return ls.length > 0 && Math.min(...ls) <= line && line <= Math.max(...ls); });
+    return collectTableIdentifiers(stmt ? [stmt] : doc.items);
+}
 
+function tablesInScope(sql: string, offset: number, defaultDatabase: string | undefined): TableInScope[] {
     const out: TableInScope[] = [];
-    for (const id of collectTableIdentifiers(stmt ? [stmt] : doc.items)) {
+    for (const id of identifiersInScope(sql, offset)) {
         const chain = id.items.find(c => c.item_type.startsWith('TableIdentifier') && c.item_type !== 'TableIdentifierAlias');
         if (!chain) { continue; }                                   // CTE reference — no catalog columns
         const table = toTable(splitChain(textAt(sql, chain.range)), defaultDatabase);

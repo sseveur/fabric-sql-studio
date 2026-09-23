@@ -28,7 +28,8 @@ import { buildMultiQueryLineage } from './services/lineageGraph';
 import { showMultiLineagePanel } from './lineage/lineageWebviewProvider';
 import { runColumnProfileForTable } from './services/columnProfile';
 import { showColumnProfilePanel } from './tableResultsPanel/columnProfilePanel';
-import { resolveColumnAtPosition, ResolvedColumn, resolveTableAtPosition } from './services/columnResolver';
+import { resolveColumnAtPosition, ResolvedColumn, resolveCteAtPosition, resolveTableAtPosition } from './services/columnResolver';
+import { extractCtePreviews } from './services/ctePreview';
 import { connectionForDatabase } from './services/queryRouter';
 
 export const COMMAND_CLEAR_EXTENSION_CACHE = "fabricSql.clear-extension-cache";
@@ -213,7 +214,15 @@ export const commandPreviewTableAtCursor = async function (...args: any[]) {
 
 	const resolved = resolveTableAtPosition(sql, offset, conn.database);
 	if (!resolved) {
-		vscode.window.showWarningMessage('Place the cursor on a table name (or its alias) before running Preview Table.');
+		// A CTE (or its alias) has no catalog entry — preview it the way the CodeLens does.
+		const cte = resolveCteAtPosition(sql, offset);
+		const limit = vscode.workspace.getConfiguration('fabricSql').get<number>('ctePreviewRowLimit', 100);
+		const preview = cte ? extractCtePreviews(sql, limit).find(p => p.name.toLowerCase() === cte.toLowerCase()) : undefined;
+		if (preview) {
+			await vscode.commands.executeCommand(COMMAND_PREVIEW_CTE, preview.previewSql, preview.name);
+			return;
+		}
+		vscode.window.showWarningMessage('Place the cursor on a table name, a CTE name, or an alias before running Preview Table.');
 		return;
 	}
 
