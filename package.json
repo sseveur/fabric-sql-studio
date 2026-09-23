@@ -129,23 +129,13 @@
 						"title": "Default Query Location",
 						"description": "Fabric SQL processing location for query jobs (e.g. US, EU, australia-southeast1, asia-east1). When empty, auto-detects from the first FROM clause via datasets.get. Set explicitly to override detection or for unqualified/CTE-only queries."
 					},
-					"fabricSql.costPerTB": {
-						"type": "number",
-						"default": 6.25,
-						"minimum": 0,
-						"maximum": 100,
-						"scope": "machine-overridable",
-						"order": 5,
-						"title": "Cost per TB ($)",
-						"description": "Fabric SQL cost per terabyte for query cost estimation. Default is $6.25 (on-demand pricing). Set to 0 to hide cost estimates."
-					},
 					"fabricSql.autoPreviewCreatedTables": {
 						"type": "boolean",
 						"default": false,
 						"scope": "machine-overridable",
 						"order": 6,
 						"title": "Auto-Preview Created Tables",
-						"description": "Automatically preview first 100 rows when CREATE TABLE completes successfully (disabled by default)"
+						"description": "After a successful run, open a TOP 100 preview of each permanent table it created (CREATE TABLE, SELECT INTO). Temp tables are skipped."
 					}
 				}
 			},

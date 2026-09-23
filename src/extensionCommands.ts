@@ -30,6 +30,7 @@ import { runColumnProfileForTable } from './services/columnProfile';
 import { showColumnProfilePanel } from './tableResultsPanel/columnProfilePanel';
 import { resolveColumnAtPosition, ResolvedColumn, resolveCteAtPosition, resolveTableAtPosition } from './services/columnResolver';
 import { extractCtePreviews } from './services/ctePreview';
+import { extractLineage } from './services/lineageService';
 import { connectionForDatabase } from './services/queryRouter';
 
 export const COMMAND_CLEAR_EXTENSION_CACHE = "fabricSql.clear-extension-cache";
@@ -537,6 +538,7 @@ async function runSqlQuery(resultsGridRender: ResultsGridRender, conn: Connectio
 				query: queryText, timestamp: queryStartTime, bytesProcessed: 0,
 				durationMs: Date.now() - queryStartTime, projectId: conn.id, status: 'success'
 			});
+			await previewCreatedTables(queryText, conn);
 		}
 		return result.sets.length;
 	} catch (errorx: any) {
@@ -727,6 +729,20 @@ export const commandExplainQuery = async function () {
 		vscode.window.showErrorMessage(`Estimated plan failed: ${error?.message ?? error}`);
 	}
 };
+
+/** fabricSql.autoPreviewCreatedTables: open a TOP 100 preview of each permanent table the run created. */
+async function previewCreatedTables(sql: string, conn: ConnectionRef): Promise<void> {
+	if (!vscode.workspace.getConfiguration('fabricSql').get<boolean>('autoPreviewCreatedTables', false)) { return; }
+	const created = extractLineage(sql).targets
+		.filter(t => (t.statementType === 'CREATE TABLE' || t.statementType === 'SELECT INTO') && !t.table.startsWith('#'));
+	// ponytail: cap at 3 panels for scripts that create many tables
+	for (const t of created.slice(0, 3)) {
+		const database = t.database ?? conn.database;
+		if (!database) { continue; }
+		const owner = (await connectionForDatabase(database)) ?? conn;
+		await commandViewTable({ ref: { conn: owner.id, database, schema: t.schema ?? 'dbo', name: t.table, kind: 'table' } });
+	}
+}
 
 let planPanel: vscode.WebviewPanel | null = null;
 let lastPlanXml: string | null = null;
