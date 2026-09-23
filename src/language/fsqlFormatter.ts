@@ -19,7 +19,7 @@ export interface FormatOptions {
 }
 
 export function getFormatOptions(): FormatOptions {
-    const config = vscode.workspace.getConfiguration('vscode-bigquery');
+    const config = vscode.workspace.getConfiguration('fabricSql');
     const editorConfig = vscode.workspace.getConfiguration('editor');
 
     return {
@@ -51,7 +51,7 @@ export function formatErrorSummary(error: any): string {
     return `Cannot format SQL: ${msg.split('\n')[0]}`;
 }
 
-export function formatBigQuerySQL(sql: string, options?: Partial<FormatOptions>): string {
+export function formatFabricSqlSQL(sql: string, options?: Partial<FormatOptions>): string {
     const opts = { ...getFormatOptions(), ...options };
 
     let formatted = format(sql, {

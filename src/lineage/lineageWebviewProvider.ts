@@ -4,7 +4,7 @@ import { calculateLayout } from './dagLayout';
 import { renderGraphToSvg, getGraphStyles, renderLegend } from './svgRenderer';
 import { LineageExportService } from './lineageExportService';
 
-const VIEW_TYPE = 'bigquery-lineage';
+const VIEW_TYPE = 'fabric-sql-lineage';
 
 let currentPanel: vscode.WebviewPanel | undefined;
 let messageHandlerDisposable: vscode.Disposable | undefined;
@@ -61,8 +61,8 @@ export function showLineagePanel(graph: LineageGraph, context: vscode.ExtensionC
 
     // Push export theme changes to webview in real-time
     configChangeDisposable = vscode.workspace.onDidChangeConfiguration(e => {
-        if (e.affectsConfiguration('vscode-bigquery.lineageExportTheme') && currentPanel) {
-            const theme = vscode.workspace.getConfiguration('vscode-bigquery').get<string>('lineageExportTheme', 'dark');
+        if (e.affectsConfiguration('fabricSql.lineageExportTheme') && currentPanel) {
+            const theme = vscode.workspace.getConfiguration('fabricSql').get<string>('lineageExportTheme', 'dark');
             currentPanel.webview.postMessage({ type: 'themeChanged', theme });
         }
     });
@@ -132,8 +132,8 @@ export function showMultiLineagePanel(result: MultiLineageResult, context: vscod
 
     // Push export theme changes to webview in real-time
     configChangeDisposable = vscode.workspace.onDidChangeConfiguration(e => {
-        if (e.affectsConfiguration('vscode-bigquery.lineageExportTheme') && currentPanel) {
-            const theme = vscode.workspace.getConfiguration('vscode-bigquery').get<string>('lineageExportTheme', 'dark');
+        if (e.affectsConfiguration('fabricSql.lineageExportTheme') && currentPanel) {
+            const theme = vscode.workspace.getConfiguration('fabricSql').get<string>('lineageExportTheme', 'dark');
             currentPanel.webview.postMessage({ type: 'themeChanged', theme });
         }
     });
@@ -611,7 +611,7 @@ function getHtmlContent(graph: LineageGraph): string {
             const vscode = acquireVsCodeApi();
 
             // Export theme from extension settings
-            var exportTheme = '${vscode.workspace.getConfiguration('vscode-bigquery').get<string>('lineageExportTheme', 'dark')}';
+            var exportTheme = '${vscode.workspace.getConfiguration('fabricSql').get<string>('lineageExportTheme', 'dark')}';
 
             // Listen for theme changes from extension host
             window.addEventListener('message', function(event) {
@@ -1136,7 +1136,7 @@ function getMultiQueryHtmlContent(result: MultiLineageResult): string {
             const vscode = acquireVsCodeApi();
 
             // Export theme from extension settings
-            var exportTheme = '${vscode.workspace.getConfiguration('vscode-bigquery').get<string>('lineageExportTheme', 'dark')}';
+            var exportTheme = '${vscode.workspace.getConfiguration('fabricSql').get<string>('lineageExportTheme', 'dark')}';
 
             // Listen for theme changes from extension host
             window.addEventListener('message', function(event) {

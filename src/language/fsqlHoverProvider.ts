@@ -1,19 +1,19 @@
 import { CancellationToken, Hover, HoverProvider, MarkdownString, Position, ProviderResult, TextDocument } from "vscode";
 import { parse } from './tsqlParser';
-import { BqsqlDocument, BqsqlDocumentItem } from "./bqsqlDocument";
-import { isBigQueryLanguage } from "../services/languageUtils";
-import { bigqueryTableSchemaService } from "../extension";
-import { BigqueryTableSchema } from "../services/bigqueryTableSchema";
+import { FsqlDocument, FsqlDocumentItem } from "./fsqlDocument";
+import { isFabricSqlLanguage } from "../services/languageUtils";
+import { tableSchemaService } from "../extension";
+import { TableSchemaColumn } from "../services/tableSchemaColumn";
 import { extractCteColumns, getCteNames, CteColumn } from "../services/cteExtractor";
 
-export class BqsqlHoverProvider implements HoverProvider {
+export class FsqlHoverProvider implements HoverProvider {
 
     provideHover(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Hover> {
 
-        if (!isBigQueryLanguage(document.languageId)) { return; }
+        if (!isFabricSqlLanguage(document.languageId)) { return; }
 
         const documentContent = document.getText();
-        const parsed = parse(documentContent) as BqsqlDocument;
+        const parsed = parse(documentContent) as FsqlDocument;
 
         // Find TableIdentifier at the current position
         const tableIdentifier = this.findTableIdentifierAtPosition(parsed.items, position.line, position.character, documentContent);
@@ -32,11 +32,11 @@ export class BqsqlHoverProvider implements HoverProvider {
             }
         }
 
-        // Get schema from cache (for BigQuery tables)
-        const schema = bigqueryTableSchemaService.getSchemaFromCache(documentContent, tableIdentifier);
+        // Get schema from cache (for Fabric SQL tables)
+        const schema = tableSchemaService.getSchemaFromCache(documentContent, tableIdentifier);
         if (schema.length === 0) {
             // Try to preload schema for next hover
-            bigqueryTableSchemaService.preLoadSchemaToCache(documentContent, tableIdentifier).catch(ex => console.error(ex));
+            tableSchemaService.preLoadSchemaToCache(documentContent, tableIdentifier).catch(ex => console.error(ex));
 
             // Show a loading message with the table name
             const tableName = this.extractTableName(documentContent, tableIdentifier);
@@ -54,7 +54,7 @@ export class BqsqlHoverProvider implements HoverProvider {
         return new Hover(markdown);
     }
 
-    private findTableIdentifierAtPosition(items: BqsqlDocumentItem[], line: number, character: number, documentContent: string): BqsqlDocumentItem | null {
+    private findTableIdentifierAtPosition(items: FsqlDocumentItem[], line: number, character: number, documentContent: string): FsqlDocumentItem | null {
         for (const item of items) {
             if (item.item_type === "TableIdentifier") {
                 // Check if position is within any of the table identifier's child ranges
@@ -74,7 +74,7 @@ export class BqsqlHoverProvider implements HoverProvider {
         return null;
     }
 
-    private isPositionInTableIdentifier(tableIdentifier: BqsqlDocumentItem, line: number, character: number, documentContent: string): boolean {
+    private isPositionInTableIdentifier(tableIdentifier: FsqlDocumentItem, line: number, character: number, documentContent: string): boolean {
         // For backtick-quoted identifiers, we need to check the full range
         // The parser may store the entire `project.dataset.table` as one item
 
@@ -110,7 +110,7 @@ export class BqsqlHoverProvider implements HoverProvider {
         return false;
     }
 
-    private getAllRanges(item: BqsqlDocumentItem): number[][] {
+    private getAllRanges(item: FsqlDocumentItem): number[][] {
         const ranges: number[][] = [];
 
         if (item.range && item.range.length >= 3) {
@@ -126,7 +126,7 @@ export class BqsqlHoverProvider implements HoverProvider {
         return ranges;
     }
 
-    private extractTableName(documentContent: string, tableIdentifier: BqsqlDocumentItem): string | null {
+    private extractTableName(documentContent: string, tableIdentifier: FsqlDocumentItem): string | null {
         const lines = documentContent.split('\n');
         const ranges = this.getAllRanges(tableIdentifier);
 
@@ -150,7 +150,7 @@ export class BqsqlHoverProvider implements HoverProvider {
         return tableName;
     }
 
-    private formatSchemaAsMarkdown(schema: BigqueryTableSchema[]): MarkdownString {
+    private formatSchemaAsMarkdown(schema: TableSchemaColumn[]): MarkdownString {
         if (schema.length === 0) {
             return new MarkdownString("No schema information available");
         }
@@ -191,7 +191,7 @@ export class BqsqlHoverProvider implements HoverProvider {
      * Check if the table identifier is a CTE reference (contains TableCteId)
      * Returns the CTE name if it is, null otherwise
      */
-    private extractCteReference(tableIdentifier: BqsqlDocumentItem, documentContent: string): string | null {
+    private extractCteReference(tableIdentifier: FsqlDocumentItem, documentContent: string): string | null {
         for (const child of tableIdentifier.items || []) {
             if (child.item_type === "TableCteId") {
                 // Extract the CTE name from the range

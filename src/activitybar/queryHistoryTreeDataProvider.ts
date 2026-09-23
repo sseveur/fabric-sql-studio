@@ -117,7 +117,7 @@ export class QueryHistoryTreeItem extends vscode.TreeItem {
 
             // Click to show full query
             this.command = {
-                command: 'vscode-bigquery.history-show',
+                command: 'fabricSql.history-show',
                 title: 'Show Query',
                 arguments: [historyItem]
             };

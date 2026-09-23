@@ -1,28 +1,34 @@
 # Changelog
 
-All notable changes to the BigQuery Studio extension will be documented in this file.
+All notable changes to the Fabric SQL Studio extension (formerly BigQuery Studio) will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - Fabric / SQL Server port
+## [3.0.0] - 2026-09-23 - Fabric SQL Studio
+
+### Renamed
+
+- **Fabric SQL Studio is now Fabric SQL Studio** - Extension id `s-seveur.fabric-sql-studio`, settings prefix `fabricSql.*` (was `fabricSql.*`), command prefix `Fabric SQL:`, language id `fsql` on `.sql` and `.fsql` files (was `fsql` / `.fsql`), notebook type `fabric-sql-notebook`. Existing `fabricSql.*` settings must be renamed by hand; query history and the table index carry over.
+- **Exports, notebooks and column profiles on TDS** - CSV / JSONL / Copy buttons export the rows the host already holds; notebook cells run over the same client and routing as the results panel with one grid per result set; Profile Column runs a T-SQL batch (summary + top 20 values, PERCENTILE_CONT quantiles where supported). The last Fabric SQL client code and Google packages are gone.
+- **Lineage, CTE preview and splitting on the T-SQL parser** - `sql-parser-cst` (GPL) is gone; table references, CTE dependencies, statement splitting and the cursor resolvers read the in-house parse tree, so bracket-quoted and three-part names work and CTE previews use `SELECT TOP n`.
 
 ### Added
 
-- **Estimated plan** - `BigQuery: Show Estimated Plan` (editor context menu) runs the editor text with `SET SHOWPLAN_XML ON` on the routed connection — nothing executes — and puts estimated rows, optimizer cost and warning count in the status bar, with the full plan XML beside the editor. Replaces the BigQuery dry-run byte / cost estimate.
+- **Estimated plan** - `Fabric SQL: Show Estimated Plan` (editor context menu) runs the editor text with `SET SHOWPLAN_XML ON` on the routed connection — nothing executes — and puts estimated rows, optimizer cost and warning count in the status bar, with the full plan XML beside the editor. Replaces the Fabric SQL dry-run byte / cost estimate.
 - **Job History (server) on queryinsights** - The server-side history view now reads `queryinsights.exec_requests_history` on Fabric (completed requests, elapsed / CPU / scanned MB / cache hit, paged 50 at a time, "only mine" toggle) and `sys.dm_exec_requests` on SQL Server / Azure SQL (live requests). The details panel shows the request's timings and scan volumes; "Open Job Results" is gone because a finished TDS rowset cannot be re-fetched by id.
 - **T-SQL language services** - Completion (T-SQL functions and keywords, `alias.` / `[db].[schema].[table].` column lists from `INFORMATION_SCHEMA.COLUMNS`), hover schema, semantic tokens, folding and the CTE Preview CodeLens now run on a T-SQL tokenizer; the formatter uses `sql-formatter`'s `transactsql` dialect; syntax highlighting, snippets and bracket pairs are T-SQL. Server errors from a run are shown as diagnostics on the reported line, and the status bar shows rows / elapsed time after each run.
 - **Add Fabric Connection** - Pick a workspace, then a warehouse / lakehouse SQL endpoint / SQL database from the Fabric REST API (`Workspace.Read.All`), and a connection profile is written and made active — no more copying hosts from the portal. `+` button on the explorer title bar.
-- **Connection profiles + explorer** - `vscode-bigquery.connections` lists Fabric Warehouse / Lakehouse SQL endpoints, Azure SQL or SQL Server hosts; `vscode-bigquery.activeConnection` (or "Use This Connection" on a tree node) picks the one `Ctrl+Enter` targets. The explorer now shows connection → database → schema → tables / views / routines from the catalog views, with Preview (Top 100), Preview Schema, Create Query, Open Definition, Copy Path (`[db].[schema].[name]`), pin/unpin (`vscode-bigquery.pinned-objects`) and the indexed search. Replaces the GCP project / dataset settings (`projects`, `tables`, `pinned-projects`, `hidden-projects`, `pinned-tables`).
-- **Run queries against Fabric / SQL Server** - `Ctrl+Enter` runs the batch over TDS with your Entra token. Multi-statement batches render one grid per result set; DML statements show their affected-row count. Results are held host-side up to `vscode-bigquery.maxRows` (default 100k) and paged into the grid without any token crossing into the webview.
+- **Connection profiles + explorer** - `fabricSql.connections` lists Fabric Warehouse / Lakehouse SQL endpoints, Azure SQL or SQL Server hosts; `fabricSql.activeConnection` (or "Use This Connection" on a tree node) picks the one `Ctrl+Enter` targets. The explorer now shows connection → database → schema → tables / views / routines from the catalog views, with Preview (Top 100), Preview Schema, Create Query, Open Definition, Copy Path (`[db].[schema].[name]`), pin/unpin (`fabricSql.pinned-objects`) and the indexed search. Replaces the GCP project / dataset settings (`projects`, `tables`, `pinned-projects`, `hidden-projects`, `pinned-tables`).
+- **Run queries against Fabric / SQL Server** - `Ctrl+Enter` runs the batch over TDS with your Entra token. Multi-statement batches render one grid per result set; DML statements show their affected-row count. Results are held host-side up to `fabricSql.maxRows` (default 100k) and paged into the grid without any token crossing into the webview.
 
 ### Changed
 
-- **Authentication is now Entra ID** - Sign in with a Microsoft account through VS Code's built-in Accounts menu, or reuse an `az login` session (`vscode-bigquery.authMode`, `vscode-bigquery.tenantId`). New `BigQuery: Show Auth Token Info` command prints audience / tenant / expiry for the SQL and Fabric scopes. The gcloud CLI is no longer required and `gcloudPath` is gone.
+- **Authentication is now Entra ID** - Sign in with a Microsoft account through VS Code's built-in Accounts menu, or reuse an `az login` session (`fabricSql.authMode`, `fabricSql.tenantId`). New `Fabric SQL: Show Auth Token Info` command prints audience / tenant / expiry for the SQL and Fabric scopes. The gcloud CLI is no longer required and `gcloudPath` is gone.
 
 ### Removed
 
-- **BigQuery WASM parser** - The Rust `bqsql_parser` crate, its wasm-pack build step and the `@bstruct/bqsql-parser` dependency are gone; there is no native toolchain in the build any more. Dry-run byte / cost estimation is gone with it (no equivalent in T-SQL; a query-plan estimate comes in a later milestone).
+- **Fabric SQL WASM parser** - The Rust `fsql_parser` crate, its wasm-pack build step and the `@bstruct/fsql-parser` dependency are gone; there is no native toolchain in the build any more. Dry-run byte / cost estimation is gone with it (no equivalent in T-SQL; a query-plan estimate comes in a later milestone).
 - **gcloud-based auth** - User Login with Google Drive, User Login via Console, Service Account Login, Initialize gcloud, Activate/Remove User, and the Troubleshoot page.
 
 - **Pub/Sub export** - The "Send to Pub/Sub" command, grid button and `@google-cloud/pubsub` dependency are gone; there is no equivalent on the Fabric / SQL Server targets this branch is moving to.

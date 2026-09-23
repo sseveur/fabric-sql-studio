@@ -115,9 +115,9 @@ export class QueryResultsMappingService {
                 const element = tabGroup.tabs[t];
                 if (element.input
                     && (
-                        (element.input as any).viewType === 'mainThreadWebview-bigquery-query-results'
+                        (element.input as any).viewType === 'mainThreadWebview-fabric-sql-query-results'
                         ||
-                        (element.input as any).viewType === 'mainThreadWebview-bigquery-query-chart'
+                        (element.input as any).viewType === 'mainThreadWebview-fabric-sql-query-chart'
                     )
                 ) {
                     const uuid = element.label.substring(element.label.length - 8);

@@ -6,7 +6,7 @@ export interface TableMetadata {
     etag: string;
     // 'damiao-project-1:PvhTest.MetapackProofOfDeliveryWithICSInformation'
     id: string;
-    // 'bigquery#table'
+    // 'fabric-sql#table'
     kind: string;
     // '1642435677331'
     lastModifiedTime: string;
@@ -26,7 +26,7 @@ export interface TableMetadata {
     numTotalLogicalBytes: string;
     // {fields: Array(19)}
     schema: { fields: SchemaField[] };
-    // 'https://bigquery.googleapis.com/bigquery/v2/projects/damiao-project-1/datasets/PvhTest/tables/MetapackProofOfDeliveryWithICSInformation'
+    // 'https://fabric-sql.googleapis.com/fabric-sql/v2/projects/damiao-project-1/datasets/PvhTest/tables/MetapackProofOfDeliveryWithICSInformation'
     selfLink: string;
     
     tableReference: TableReference;

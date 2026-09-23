@@ -1,6 +1,6 @@
-import { BqsqlDocumentItem } from "../language/bqsqlDocument";
+import { FsqlDocumentItem } from "../language/fsqlDocument";
 import { splitChain, textAt } from "../language/tsqlParser";
-import { BigqueryTableSchema } from "./bigqueryTableSchema";
+import { TableSchemaColumn } from "./tableSchemaColumn";
 import { getActiveConnection } from "./connections";
 import { bracket } from "./objectRef";
 import { clientFor } from "./sqlServerClient";
@@ -8,12 +8,12 @@ import { connectionForDatabase } from "./queryRouter";
 
 /**
  * Column cache for hover / completion, filled from INFORMATION_SCHEMA.COLUMNS over the active
- * connection. Field names keep the BigQuery-era shape (project_id = database, dataset_name =
+ * connection. Field names keep the Fabric SQL-era shape (project_id = database, dataset_name =
  * schema) so the providers that render them need no change; renamed in M9.
  */
-export class BigqueryTableSchemaService {
+export class TableSchemaService {
 
-    private schemas: BigqueryTableSchema[] = [];
+    private schemas: TableSchemaColumn[] = [];
     private loading = new Set<string>();
 
     public clearCache(): void {
@@ -25,7 +25,7 @@ export class BigqueryTableSchemaService {
         return new Set(this.schemas.map(s => this.key(s.project_id, s.dataset_name, s.table_name))).size;
     }
 
-    public async preLoadSchemaToCache(sql: string, tableIdentifier: BqsqlDocumentItem): Promise<boolean> {
+    public async preLoadSchemaToCache(sql: string, tableIdentifier: FsqlDocumentItem): Promise<boolean> {
         const table = this.resolveTableIdentifier(sql, tableIdentifier);
         if (!table) { return false; }
         const [database, schema, name] = table;
@@ -41,7 +41,7 @@ export class BigqueryTableSchemaService {
             const rows = await clientFor(conn).query(
                 `SELECT COLUMN_NAME, DATA_TYPE, ORDINAL_POSITION FROM ${bracket(database)}.INFORMATION_SCHEMA.COLUMNS ` +
                 `WHERE TABLE_SCHEMA = N'${lit(schema)}' AND TABLE_NAME = N'${lit(name)}' ORDER BY ORDINAL_POSITION`);
-            const fresh: BigqueryTableSchema[] = rows.map(r => ({
+            const fresh: TableSchemaColumn[] = rows.map(r => ({
                 project_id: database, dataset_name: schema, table_name: name,
                 column_name: String(r[0]), data_type: String(r[1]), ordinal_position: String(r[2]),
                 is_partitioning_column: 'NO', description: '',
@@ -54,7 +54,7 @@ export class BigqueryTableSchemaService {
         }
     }
 
-    public getSchemaFromCache(sql: string, tableIdentifier: BqsqlDocumentItem): BigqueryTableSchema[] {
+    public getSchemaFromCache(sql: string, tableIdentifier: FsqlDocumentItem): TableSchemaColumn[] {
         const table = this.resolveTableIdentifier(sql, tableIdentifier);
         if (!table) { return []; }
         const key = this.key(...table);
@@ -62,7 +62,7 @@ export class BigqueryTableSchemaService {
     }
 
     /** `t` → [active db, dbo, t]; `s.t` → [active db, s, t]; `d.s.t` (or `srv.d.s.t`) → last three. */
-    private resolveTableIdentifier(sql: string, tableIdentifier: BqsqlDocumentItem): [string, string, string] | null {
+    private resolveTableIdentifier(sql: string, tableIdentifier: FsqlDocumentItem): [string, string, string] | null {
         if (tableIdentifier.item_type !== 'TableIdentifier') { return null; }
         const chain = tableIdentifier.items.find(c => c.item_type.startsWith('TableIdentifier') && c.item_type !== 'TableIdentifierAlias');
         if (!chain) { return null; }

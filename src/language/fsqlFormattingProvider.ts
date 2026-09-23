@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
-import { formatBigQuerySQL, formatErrorSummary } from './bqsqlFormatter';
+import { formatFabricSqlSQL, formatErrorSummary } from './fsqlFormatter';
 
 /**
  * Bridges the existing SQL formatter into VS Code's standard formatting API so
  * that "Format Document" (Shift+Alt+F), the editor context menu entry, and
- * editor.formatOnSave all work — not just the vscode-bigquery.format-query
+ * editor.formatOnSave all work — not just the fabricSql.format-query
  * command. Same formatting logic and settings as the command (see #12).
  */
-export class BqsqlFormattingProvider implements vscode.DocumentFormattingEditProvider {
+export class FsqlFormattingProvider implements vscode.DocumentFormattingEditProvider {
 
     provideDocumentFormattingEdits(
         document: vscode.TextDocument,
@@ -18,7 +18,7 @@ export class BqsqlFormattingProvider implements vscode.DocumentFormattingEditPro
 
         let formatted: string;
         try {
-            formatted = formatBigQuerySQL(text);
+            formatted = formatFabricSqlSQL(text);
         } catch (error: any) {
             vscode.window.showErrorMessage(formatErrorSummary(error));
             return [];

@@ -6,7 +6,7 @@ import { getStatusBarInfo } from '../extension';
  * There is no pre-flight parse: T-SQL has no dry run, so the diagnostic appears after Ctrl+Enter
  * and clears on the next successful run of that document.
  */
-const collection = vscode.languages.createDiagnosticCollection('bigquery-studio-sql');
+const collection = vscode.languages.createDiagnosticCollection('fabric-sql-studio-sql');
 
 export function clearSqlDiagnostics(uri: vscode.Uri | undefined): void {
     if (uri) { collection.delete(uri); }

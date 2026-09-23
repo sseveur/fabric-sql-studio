@@ -12,7 +12,7 @@ suite('Extension Test Suite', async () => {
 	test('COMMAND_RUN_QUERY: SELECT 1,2,3', async () => {
 
 		const doc = await vscode.workspace.openTextDocument({
-			language: 'bqsql',
+			language: 'fsql',
 			content: 'SELECT 1,2,3'
 		});
 
@@ -35,7 +35,7 @@ suite('Extension Test Suite', async () => {
 			assert.equal(secondGroupTab.tabs.length,
 				secondGroupTab
 					.tabs
-					.filter(c => ((c.input as any).viewType as string)?.endsWith("-bigquery-query-results")).length);
+					.filter(c => ((c.input as any).viewType as string)?.endsWith("-fabric-sql-query-results")).length);
 		}
 
 	});
@@ -105,7 +105,7 @@ suite('Extension Test Suite', async () => {
 		// await vscode.commands.executeCommand('workbench.action.closeAllGroups');
 
 		const doc = await vscode.workspace.openTextDocument({
-			language: 'bqsql',
+			language: 'fsql',
 			content: 'INSERT INTO Business.dataflow_test SELECT CURRENT_TIMESTAMP(), "NAME" as NAME, "body"'
 		});
 
@@ -128,7 +128,7 @@ suite('Extension Test Suite', async () => {
 			assert.equal(secondGroupTab.tabs.length,
 				secondGroupTab
 					.tabs
-					.filter(c => ((c.input as any).viewType as string)?.endsWith("-bigquery-query-results")).length);
+					.filter(c => ((c.input as any).viewType as string)?.endsWith("-fabric-sql-query-results")).length);
 		}
 
 	});
@@ -203,7 +203,7 @@ suite('Extension Test Suite', async () => {
 		// await vscode.commands.executeCommand('workbench.action.closeAllGroups');
 
 		const doc = await vscode.workspace.openTextDocument({
-			language: 'bqsql',
+			language: 'fsql',
 			content: 'DELETE Business.dataflow_test WHERE timestamp <= CURRENT_TIMESTAMP()'
 		});
 
@@ -226,7 +226,7 @@ suite('Extension Test Suite', async () => {
 			assert.equal(secondGroupTab.tabs.length,
 				secondGroupTab
 					.tabs
-					.filter(c => ((c.input as any).viewType as string)?.endsWith("-bigquery-query-results")).length);
+					.filter(c => ((c.input as any).viewType as string)?.endsWith("-fabric-sql-query-results")).length);
 		}
 
 	});

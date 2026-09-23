@@ -17,7 +17,7 @@ function escapeHtml(str: string): string {
         .replace(/'/g, '&#039;');
 }
 
-export class BigqueryAuthenticationWebviewViewProvider implements vscode.WebviewViewProvider {
+export class AuthenticationWebviewViewProvider implements vscode.WebviewViewProvider {
 
     private disposableEvent: vscode.Disposable | null = null;
     public webviewView: vscode.WebviewView | null = null;
@@ -216,7 +216,7 @@ export class BigqueryAuthenticationWebviewViewProvider implements vscode.Webview
             </div>
             <div class="footer">
                 <p>Signing out of a Microsoft account is done from the VS Code <b>Accounts</b> menu (bottom left).</p>
-                <p>Wrong tenant? Set <a href="#" data-command="open_settings">vscode-bigquery.tenantId</a>.</p>
+                <p>Wrong tenant? Set <a href="#" data-command="open_settings">fabricSql.tenantId</a>.</p>
             </div>`;
     }
 
@@ -265,7 +265,7 @@ export class BigqueryAuthenticationWebviewViewProvider implements vscode.Webview
                 vscode.commands.executeCommand(commands.COMMAND_REVOKE_SESSION);
                 break;
             case 'open_settings':
-                vscode.commands.executeCommand('workbench.action.openSettings', 'vscode-bigquery.tenantId');
+                vscode.commands.executeCommand('workbench.action.openSettings', 'fabricSql.tenantId');
                 break;
             default:
                 console.error(`Unexpected message "${message}"`);

@@ -66,7 +66,7 @@ export function flattenSchema(fields: BqField[], parentPath: string[] = [], pare
 }
 
 /**
- * Decodes a BigQuery raw cell value into plain JS using the field schema.
+ * Decodes a Fabric SQL raw cell value into plain JS using the field schema.
  * BQ wire format wraps STRUCTs as { f: [{ v: cell }, ...] } and REPEATED as [{ v: item }, ...].
  * This peels those wrappers so nested records render as real objects/arrays.
  */

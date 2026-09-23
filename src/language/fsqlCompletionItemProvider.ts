@@ -1,14 +1,14 @@
 import { suggest } from './tsqlParser';
 import * as vscode from 'vscode';
 import { CompletionItemProvider, CompletionItem, CancellationToken, CompletionContext, CompletionList, Position, ProviderResult, TextDocument, CompletionItemKind, MarkdownString } from 'vscode';
-import { bigqueryTableSchemaService } from '../extension';
-import { BqsqlSuggestion } from './bqsqlSuggestion';
-import { isBigQueryLanguage } from '../services/languageUtils';
+import { tableSchemaService } from '../extension';
+import { FsqlSuggestion } from './fsqlSuggestion';
+import { isFabricSqlLanguage } from '../services/languageUtils';
 import { extractCteColumns, getCteNames, CteColumn } from '../services/cteExtractor';
 import { extractTableReferences } from '../services/sqlTableExtractor';
 
 
-export class BqsqlCompletionItemProvider implements CompletionItemProvider<CompletionItem> {
+export class FsqlCompletionItemProvider implements CompletionItemProvider<CompletionItem> {
 
     private keywordCase: 'upper' | 'lower' | 'preserve' = 'upper';
     private functionCase: 'upper' | 'lower' | 'preserve' = 'preserve';
@@ -21,7 +21,7 @@ export class BqsqlCompletionItemProvider implements CompletionItemProvider<Compl
 
     provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext): vscode.CompletionList<vscode.CompletionItem> | vscode.CompletionItem[] | null | undefined {
 
-        if (!isBigQueryLanguage(document.languageId)) { return null; }
+        if (!isFabricSqlLanguage(document.languageId)) { return null; }
 
         // Check if in SELECT clause without prefix - show all columns from all tables
         if (this.isInSelectClauseWithoutPrefix(document, position)) {
@@ -36,7 +36,7 @@ export class BqsqlCompletionItemProvider implements CompletionItemProvider<Compl
             }
         }
 
-        const suggestions = suggest(document.getText(), position.line, position.character) as BqsqlSuggestion[];
+        const suggestions = suggest(document.getText(), position.line, position.character) as FsqlSuggestion[];
 
         const list = this.getBaseCompletionList();
 
@@ -46,9 +46,9 @@ export class BqsqlCompletionItemProvider implements CompletionItemProvider<Compl
 
                 if (element.suggestion_type === 'TableColumns') {
 
-                    const bqsql = document.getText();
+                    const fsql = document.getText();
 
-                    let schema = bigqueryTableSchemaService.getSchemaFromCache(bqsql, element.table_identifier);
+                    let schema = tableSchemaService.getSchemaFromCache(fsql, element.table_identifier);
                     let columns = schema.filter((element, position) => {
                         return schema.findIndex(e => e.column_name === element.column_name) === position;
                     });
@@ -103,7 +103,7 @@ export class BqsqlCompletionItemProvider implements CompletionItemProvider<Compl
 
     getBaseCompletionList(): CompletionList<CompletionItem> {
 
-        const config = vscode.workspace.getConfiguration('vscode-bigquery');
+        const config = vscode.workspace.getConfiguration('fabricSql');
         this.keywordCase = config.get<'upper' | 'lower' | 'preserve'>('completionKeywordCase', 'upper');
         this.functionCase = config.get<'upper' | 'lower' | 'preserve'>('completionFunctionCase', 'preserve');
 
@@ -510,7 +510,7 @@ export class BqsqlCompletionItemProvider implements CompletionItemProvider<Compl
     }
 
     /**
-     * Get columns for a physical BigQuery table from the schema cache
+     * Get columns for a physical Fabric SQL table from the schema cache
      * Table name format: project.dataset.table or dataset.table
      */
     getPhysicalTableColumns(tableName: string): CteColumn[] {
@@ -519,7 +519,7 @@ export class BqsqlCompletionItemProvider implements CompletionItemProvider<Compl
 
         // Get all cached schemas and find matching table
         // The schema service stores schemas by project_id, dataset_name, table_name
-        const allSchemas = (bigqueryTableSchemaService as any).schemas as any[] || [];
+        const allSchemas = (tableSchemaService as any).schemas as any[] || [];
 
         // Try to find matching schema
         const eq = (a: string, b: string) => (a || '').toLowerCase() === b;

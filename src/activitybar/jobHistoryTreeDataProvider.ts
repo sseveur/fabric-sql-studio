@@ -117,10 +117,10 @@ export class JobHistoryTreeItem extends vscode.TreeItem {
             this.description = jobEntryDescription(entry);
             this.contextValue = 'job-history-job';
             this.tooltip = buildTooltip(entry);
-            this.command = { command: 'vscode-bigquery.job-history-show', title: 'Show Request', arguments: [this] };
+            this.command = { command: 'fabricSql.job-history-show', title: 'Show Request', arguments: [this] };
         } else if (type === 'more') {
             this.iconPath = new vscode.ThemeIcon('ellipsis');
-            this.command = { command: 'vscode-bigquery.job-history-load-more', title: 'Load more' };
+            this.command = { command: 'fabricSql.job-history-load-more', title: 'Load more' };
         } else if (type === 'empty') {
             this.iconPath = new vscode.ThemeIcon('info');
         }

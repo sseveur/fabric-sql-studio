@@ -1,9 +1,9 @@
 import * as assert from 'assert';
 import { parse, suggest, tokenize, splitChain, collectTableIdentifiers, textAt } from '../../language/tsqlParser';
-import { BqsqlDocumentItem } from '../../language/bqsqlDocument';
+import { FsqlDocumentItem } from '../../language/fsqlDocument';
 
-function types(items: BqsqlDocumentItem[]): string[] { return items.map(i => i.item_type); }
-function flat(items: BqsqlDocumentItem[], out: BqsqlDocumentItem[] = []): BqsqlDocumentItem[] {
+function types(items: FsqlDocumentItem[]): string[] { return items.map(i => i.item_type); }
+function flat(items: FsqlDocumentItem[], out: FsqlDocumentItem[] = []): FsqlDocumentItem[] {
     for (const i of items) { out.push(i); flat(i.items, out); }
     return out;
 }

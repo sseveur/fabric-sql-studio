@@ -1,17 +1,17 @@
 {
-	"name": "bigquery-studio",
-	"displayName": "BigQuery Studio",
-	"description": "Fork of bstruct/vscode-bigquery. A powerful Google BigQuery extension with offline-ready charting, query execution, data browsing, SQL intellisense, cost estimation, and data lineage visualization.",
-	"version": "2.12.1",
+	"name": "fabric-sql-studio",
+	"displayName": "Fabric SQL Studio",
+	"description": "Microsoft Fabric Warehouse / Lakehouse and SQL Server in VS Code: browse workspaces and catalogs, run T-SQL over TDS with Entra sign-in, results grid with charts and exports, notebooks, formatter, intellisense, estimated plans, query history and data lineage.",
+	"version": "3.0.0",
 	"publisher": "s-seveur",
 	"icon": "logo.png",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/sseveur/vscode-bigquery.git"
+		"url": "https://github.com/sseveur/fabric-sql-studio.git"
 	},
-	"homepage": "https://github.com/sseveur/vscode-bigquery",
+	"homepage": "https://github.com/sseveur/fabric-sql-studio",
 	"bugs": {
-		"url": "https://github.com/sseveur/vscode-bigquery/issues"
+		"url": "https://github.com/sseveur/fabric-sql-studio/issues"
 	},
 	"engines": {
 		"vscode": "^1.82.0"
@@ -20,34 +20,34 @@
 		"Other"
 	],
 	"activationEvents": [
-		"onView:bigquery-main-activity-bar",
-		"onWebviewPanel:bigquery-query-results",
-		"onWebviewPanel:bigquery-table-results",
+		"onView:fabric-sql-main-activity-bar",
+		"onWebviewPanel:fabric-sql-query-results",
+		"onWebviewPanel:fabric-sql-table-results",
 		"onLanguage:sql"
 	],
 	"main": "./dist/extension.js",
 	"contributes": {
 		"configuration": [
 			{
-				"title": "BigQuery Studio",
+				"title": "Fabric SQL Studio",
 				"properties": {
-					"vscode-bigquery.associateSqlFiles": {
+					"fabricSql.associateSqlFiles": {
 						"type": "boolean",
 						"default": false,
 						"scope": "machine-overridable",
 						"order": 1,
 						"title": "Associate .sql files",
-						"description": "When enabled, .sql files are automatically treated as BigQuery SQL with all extension features"
+						"description": "When enabled, .sql files are automatically treated as T-SQL with all extension features"
 					},
-					"vscode-bigquery.autoRevealResults": {
+					"fabricSql.autoRevealResults": {
 						"type": "boolean",
 						"default": true,
 						"scope": "machine-overridable",
 						"order": 2,
 						"title": "Auto-Reveal Results Panel",
-						"description": "Automatically reveal the results panel when switching to a BigQuery SQL file that has results. Disable to prevent focus switching."
+						"description": "Automatically reveal the results panel when switching to a T-SQL file that has results. Disable to prevent focus switching."
 					},
-					"vscode-bigquery.authMode": {
+					"fabricSql.authMode": {
 						"type": "string",
 						"enum": [
 							"entra-interactive",
@@ -63,7 +63,7 @@
 						"title": "Authentication Mode",
 						"description": "How Entra ID tokens are obtained for SQL Server / Fabric."
 					},
-					"vscode-bigquery.tenantId": {
+					"fabricSql.tenantId": {
 						"type": "string",
 						"default": "",
 						"scope": "machine-overridable",
@@ -71,7 +71,7 @@
 						"title": "Entra Tenant ID",
 						"description": "Tenant (directory) ID to sign in to. Leave empty for your home tenant."
 					},
-					"vscode-bigquery.connections": {
+					"fabricSql.connections": {
 						"type": "array",
 						"scope": "machine-overridable",
 						"order": 5,
@@ -103,7 +103,7 @@
 						},
 						"default": []
 					},
-					"vscode-bigquery.activeConnection": {
+					"fabricSql.activeConnection": {
 						"type": "string",
 						"default": "",
 						"scope": "machine-overridable",
@@ -111,7 +111,7 @@
 						"title": "Active Connection",
 						"description": "The connection id Ctrl+Enter queries run against. Empty = first connection."
 					},
-					"vscode-bigquery.maxRows": {
+					"fabricSql.maxRows": {
 						"type": "number",
 						"default": 100000,
 						"minimum": 1000,
@@ -120,15 +120,15 @@
 						"title": "Max Rows",
 						"description": "Rows kept per result set for paging in the grid. Larger results are cut off and flagged."
 					},
-					"vscode-bigquery.defaultLocation": {
+					"fabricSql.defaultLocation": {
 						"type": "string",
 						"default": "",
 						"scope": "machine-overridable",
 						"order": 4,
 						"title": "Default Query Location",
-						"description": "BigQuery processing location for query jobs (e.g. US, EU, australia-southeast1, asia-east1). When empty, auto-detects from the first FROM clause via datasets.get. Set explicitly to override detection or for unqualified/CTE-only queries."
+						"description": "Fabric SQL processing location for query jobs (e.g. US, EU, australia-southeast1, asia-east1). When empty, auto-detects from the first FROM clause via datasets.get. Set explicitly to override detection or for unqualified/CTE-only queries."
 					},
-					"vscode-bigquery.costPerTB": {
+					"fabricSql.costPerTB": {
 						"type": "number",
 						"default": 6.25,
 						"minimum": 0,
@@ -136,9 +136,9 @@
 						"scope": "machine-overridable",
 						"order": 5,
 						"title": "Cost per TB ($)",
-						"description": "BigQuery cost per terabyte for query cost estimation. Default is $6.25 (on-demand pricing). Set to 0 to hide cost estimates."
+						"description": "Fabric SQL cost per terabyte for query cost estimation. Default is $6.25 (on-demand pricing). Set to 0 to hide cost estimates."
 					},
-					"vscode-bigquery.autoPreviewCreatedTables": {
+					"fabricSql.autoPreviewCreatedTables": {
 						"type": "boolean",
 						"default": false,
 						"scope": "machine-overridable",
@@ -149,9 +149,9 @@
 				}
 			},
 			{
-				"title": "BigQuery Studio › Explorer",
+				"title": "Fabric SQL Studio › Explorer",
 				"properties": {
-					"vscode-bigquery.pinned-objects": {
+					"fabricSql.pinned-objects": {
 						"type": "array",
 						"items": {
 							"type": "string"
@@ -164,9 +164,9 @@
 				}
 			},
 			{
-				"title": "BigQuery Studio › Results & Clipboard",
+				"title": "Fabric SQL Studio › Results & Clipboard",
 				"properties": {
-					"vscode-bigquery.clipboardSizeLimitKb": {
+					"fabricSql.clipboardSizeLimitKb": {
 						"type": "number",
 						"default": 1024,
 						"minimum": 1,
@@ -176,20 +176,20 @@
 						"title": "Clipboard Copy Size Limit (KB)",
 						"description": "Maximum size of data (in KB) to copy to clipboard. When exceeded, you will be prompted to truncate or cancel."
 					},
-					"vscode-bigquery.copyTablePathBackticks": {
+					"fabricSql.copyTablePathBackticks": {
 						"type": "boolean",
 						"default": true,
 						"scope": "machine-overridable",
 						"order": 2,
 						"title": "Copy Table Path: Wrap in Backticks",
-						"description": "When copying a table path (right-click → Copy Table Path), wrap it in backticks so it's ready to paste directly into a BigQuery FROM clause."
+						"description": "When copying a table path (right-click → Copy Table Path), wrap it in backticks so it's ready to paste directly into a Fabric SQL FROM clause."
 					},
-					"vscode-bigquery.gridColors": {
+					"fabricSql.gridColors": {
 						"type": "object",
 						"scope": "machine-overridable",
 						"order": 3,
 						"title": "Grid: Cell Color Scheme",
-						"description": "Override cell text colors per BigQuery type. Leave empty to inherit from the active VS Code theme. Supports any CSS color (hex, rgb, hsl, named).",
+						"description": "Override cell text colors per Fabric SQL type. Leave empty to inherit from the active VS Code theme. Supports any CSS color (hex, rgb, hsl, named).",
 						"properties": {
 							"number": {
 								"type": "string",
@@ -225,9 +225,9 @@
 				}
 			},
 			{
-				"title": "BigQuery Studio › CTE Preview",
+				"title": "Fabric SQL Studio › CTE Preview",
 				"properties": {
-					"vscode-bigquery.enableCtePreviewCodeLens": {
+					"fabricSql.enableCtePreviewCodeLens": {
 						"type": "boolean",
 						"default": true,
 						"scope": "machine-overridable",
@@ -235,7 +235,7 @@
 						"title": "Enable CTE Preview CodeLens",
 						"description": "Show a clickable 'Preview CTE' link above each CTE in a WITH clause. Clicking runs that CTE (with its upstream dependencies) and shows the rows."
 					},
-					"vscode-bigquery.ctePreviewRowLimit": {
+					"fabricSql.ctePreviewRowLimit": {
 						"type": "number",
 						"default": 100,
 						"minimum": 1,
@@ -248,9 +248,9 @@
 				}
 			},
 			{
-				"title": "BigQuery Studio › Formatting",
+				"title": "Fabric SQL Studio › Formatting",
 				"properties": {
-					"vscode-bigquery.formatIndentStyle": {
+					"fabricSql.formatIndentStyle": {
 						"type": "string",
 						"default": "standard",
 						"enum": [
@@ -263,7 +263,7 @@
 						"title": "Format: Indent Style",
 						"description": "SQL indent style. standard = normal indentation, tabularLeft/Right = aligned keywords"
 					},
-					"vscode-bigquery.formatLeadingCommas": {
+					"fabricSql.formatLeadingCommas": {
 						"type": "boolean",
 						"default": true,
 						"scope": "machine-overridable",
@@ -271,7 +271,7 @@
 						"title": "Format: Leading Commas",
 						"description": "Use leading comma style (comma at start of line) instead of trailing commas"
 					},
-					"vscode-bigquery.formatExpressionWidth": {
+					"fabricSql.formatExpressionWidth": {
 						"type": "number",
 						"default": 50,
 						"minimum": 1,
@@ -281,7 +281,7 @@
 						"title": "Format: Expression Width",
 						"description": "Maximum width of expressions before breaking into multiple lines. Lower values = more line breaks."
 					},
-					"vscode-bigquery.formatInlineKeyClauses": {
+					"fabricSql.formatInlineKeyClauses": {
 						"type": "boolean",
 						"default": false,
 						"scope": "machine-overridable",
@@ -289,7 +289,7 @@
 						"title": "Format: Inline GROUP BY / ORDER BY",
 						"description": "Keep GROUP BY and ORDER BY item lists on a single line when they fit within 'Format: Expression Width', wrapping at commas only when they exceed it. SELECT is left expanded. Off by default."
 					},
-					"vscode-bigquery.formatNewlineBeforeSemicolon": {
+					"fabricSql.formatNewlineBeforeSemicolon": {
 						"type": "boolean",
 						"default": false,
 						"scope": "machine-overridable",
@@ -297,7 +297,7 @@
 						"title": "Format: Newline Before Semicolon",
 						"description": "Place semicolon on a separate line at the end of statements"
 					},
-					"vscode-bigquery.formatDenseOperators": {
+					"fabricSql.formatDenseOperators": {
 						"type": "boolean",
 						"default": false,
 						"scope": "machine-overridable",
@@ -305,7 +305,7 @@
 						"title": "Format: Dense Operators",
 						"description": "Pack operators without surrounding spaces (e.g., 1+1 instead of 1 + 1)"
 					},
-					"vscode-bigquery.formatLogicalOperatorNewline": {
+					"fabricSql.formatLogicalOperatorNewline": {
 						"type": "string",
 						"default": "before",
 						"enum": [
@@ -317,7 +317,7 @@
 						"title": "Format: Logical Operator Newline",
 						"description": "Where to place newlines for AND/OR operators"
 					},
-					"vscode-bigquery.formatLogicalOperatorStyle": {
+					"fabricSql.formatLogicalOperatorStyle": {
 						"type": "string",
 						"default": "indented",
 						"enum": [
@@ -330,7 +330,7 @@
 						"title": "Format: Logical Operator Style",
 						"description": "How AND/OR/ON are positioned relative to their parent clause. 'keywordAligned' treats them as alignment keywords, 'contentAligned' aligns them with the clause content, 'indented' (default) indents AND/OR/ON one level under the parent keyword."
 					},
-					"vscode-bigquery.formatKeywordCase": {
+					"fabricSql.formatKeywordCase": {
 						"type": "string",
 						"default": "upper",
 						"enum": [
@@ -343,7 +343,7 @@
 						"title": "Format: Keyword Case",
 						"description": "How to format SQL keywords (SELECT, FROM, etc.)"
 					},
-					"vscode-bigquery.formatFunctionCase": {
+					"fabricSql.formatFunctionCase": {
 						"type": "string",
 						"default": "preserve",
 						"enum": [
@@ -356,7 +356,7 @@
 						"title": "Format: Function Case",
 						"description": "How to format function names (COUNT, SUM, etc.)"
 					},
-					"vscode-bigquery.formatIdentifierCase": {
+					"fabricSql.formatIdentifierCase": {
 						"type": "string",
 						"default": "preserve",
 						"enum": [
@@ -369,7 +369,7 @@
 						"title": "Format: Identifier Case",
 						"description": "How to format identifiers (table names, column names)"
 					},
-					"vscode-bigquery.formatDataTypeCase": {
+					"fabricSql.formatDataTypeCase": {
 						"type": "string",
 						"default": "preserve",
 						"enum": [
@@ -382,7 +382,7 @@
 						"title": "Format: Data Type Case",
 						"description": "How to format data types (INT64, STRING, etc.)"
 					},
-					"vscode-bigquery.completionKeywordCase": {
+					"fabricSql.completionKeywordCase": {
 						"type": "string",
 						"default": "upper",
 						"enum": [
@@ -395,7 +395,7 @@
 						"title": "Completion: Keyword Case",
 						"description": "Case used when inserting SQL keyword completions (SELECT, FROM, WHERE, etc.)"
 					},
-					"vscode-bigquery.completionFunctionCase": {
+					"fabricSql.completionFunctionCase": {
 						"type": "string",
 						"default": "preserve",
 						"enum": [
@@ -406,14 +406,14 @@
 						"scope": "machine-overridable",
 						"order": 14,
 						"title": "Completion: Function Case",
-						"description": "Case used when inserting function name completions (COUNT, SUM, etc.). 'preserve' keeps BigQuery's uppercase convention."
+						"description": "Case used when inserting function name completions (COUNT, SUM, etc.). 'preserve' keeps Fabric SQL's uppercase convention."
 					}
 				}
 			},
 			{
-				"title": "BigQuery Studio › Lineage",
+				"title": "Fabric SQL Studio › Lineage",
 				"properties": {
-					"vscode-bigquery.lineageExportTheme": {
+					"fabricSql.lineageExportTheme": {
 						"type": "string",
 						"default": "dark",
 						"enum": [
@@ -434,30 +434,31 @@
 		],
 		"languages": [
 			{
-				"id": "bqsql",
+				"id": "fsql",
 				"aliases": [
-					"T-SQL (Fabric / SQL Server)"
+					"T-SQL (Fabric / SQL Server)",
+					"fsql"
 				],
-				"configuration": "./resources/language/bqsql-language-configuration.json",
+				"configuration": "./resources/language/fsql-language-configuration.json",
 				"extensions": [
-					"bqsql",
+					"fsql",
 					"sql"
 				],
 				"icon": {
-					"light": "./resources/google-bigquery.svg",
-					"dark": "./resources/google-bigquery.svg"
+					"light": "./resources/fabric-sql.svg",
+					"dark": "./resources/fabric-sql.svg"
 				}
 			}
 		],
 		"grammars": [
 			{
-				"language": "bqsql",
-				"scopeName": "source.bqsql",
-				"path": "./resources/language/bqsql.tmGrammar.json"
+				"language": "fsql",
+				"scopeName": "source.fsql",
+				"path": "./resources/language/fsql.tmGrammar.json"
 			},
 			{
-				"scopeName": "source.sql.bqsql-injection",
-				"path": "./resources/language/bqsql.tmGrammar.json",
+				"scopeName": "source.sql.fsql-injection",
+				"path": "./resources/language/fsql.tmGrammar.json",
 				"injectTo": [
 					"source.sql"
 				]
@@ -465,12 +466,12 @@
 		],
 		"snippets": [
 			{
-				"language": "bqsql",
+				"language": "fsql",
 				"path": "./resources/language/snippets.json"
 			}
 		],
 		"configurationDefaults": {
-			"[bqsql]": {
+			"[fsql]": {
 				"editor.semanticHighlighting.enabled": true
 			},
 			"[sql]": {
@@ -479,227 +480,227 @@
 		},
 		"commands": [
 			{
-				"command": "vscode-bigquery.run-query",
-				"title": "BigQuery: Run Query",
+				"command": "fabricSql.run-query",
+				"title": "Fabric SQL: Run Query",
 				"icon": "$(debug-start)"
 			},
 			{
-				"command": "vscode-bigquery.run-selected-query",
-				"title": "BigQuery: Run Selected Query",
+				"command": "fabricSql.run-selected-query",
+				"title": "Fabric SQL: Run Selected Query",
 				"icon": "$(debug-line-by-line)"
 			},
 			{
-				"command": "vscode-bigquery.profile-column",
-				"title": "BigQuery: Profile Column",
+				"command": "fabricSql.profile-column",
+				"title": "Fabric SQL: Profile Column",
 				"icon": "$(graph)"
 			},
 			{
-				"command": "vscode-bigquery.preview-table-at-cursor",
-				"title": "BigQuery: Preview Table",
+				"command": "fabricSql.preview-table-at-cursor",
+				"title": "Fabric SQL: Preview Table",
 				"icon": "$(table)"
 			},
 			{
-				"command": "vscode-bigquery.user-login",
-				"title": "BigQuery: Sign In"
+				"command": "fabricSql.user-login",
+				"title": "Fabric SQL: Sign In"
 			},
 			{
-				"command": "vscode-bigquery.auth-token-info",
-				"title": "BigQuery: Show Auth Token Info"
+				"command": "fabricSql.auth-token-info",
+				"title": "Fabric SQL: Show Auth Token Info"
 			},
 			{
-				"command": "vscode-bigquery.authentication-refresh",
-				"title": "BigQuery: Refresh Authentication",
+				"command": "fabricSql.authentication-refresh",
+				"title": "Fabric SQL: Refresh Authentication",
 				"icon": "$(refresh)"
 			},
 			{
-				"command": "vscode-bigquery.explorer-refresh",
-				"title": "BigQuery: Refresh Explorer",
+				"command": "fabricSql.explorer-refresh",
+				"title": "Fabric SQL: Refresh Explorer",
 				"icon": "$(refresh)"
 			},
 			{
-				"command": "vscode-bigquery.view-table",
-				"title": "BigQuery: Preview (Top 100)",
+				"command": "fabricSql.view-table",
+				"title": "Fabric SQL: Preview (Top 100)",
 				"icon": "$(link-external)"
 			},
 			{
-				"command": "vscode-bigquery.view-table-schema",
-				"title": "BigQuery: Preview Schema",
+				"command": "fabricSql.view-table-schema",
+				"title": "Fabric SQL: Preview Schema",
 				"icon": "$(symbol-class)"
 			},
 			{
-				"command": "vscode-bigquery.create-table-default-query",
-				"title": "BigQuery: Create Query",
+				"command": "fabricSql.create-table-default-query",
+				"title": "Fabric SQL: Create Query",
 				"icon": "$(file-text)"
 			},
 			{
-				"command": "vscode-bigquery.open-ddl",
-				"title": "BigQuery: Open Definition",
+				"command": "fabricSql.open-ddl",
+				"title": "Fabric SQL: Open Definition",
 				"icon": "$(link-external)"
 			},
 			{
-				"command": "vscode-bigquery.set-default-project",
-				"title": "BigQuery: Use This Connection",
+				"command": "fabricSql.set-default-project",
+				"title": "Fabric SQL: Use This Connection",
 				"icon": "$(issue-closed)"
 			},
 			{
-				"command": "vscode-bigquery.download-csv",
-				"title": "BigQuery: Download CSV",
+				"command": "fabricSql.download-csv",
+				"title": "Fabric SQL: Download CSV",
 				"icon": "$(cloud-download)"
 			},
 			{
-				"command": "vscode-bigquery.download-jsonl",
-				"title": "BigQuery: Download JSONL",
+				"command": "fabricSql.download-jsonl",
+				"title": "Fabric SQL: Download JSONL",
 				"icon": "$(json)"
 			},
 			{
-				"command": "vscode-bigquery.copy-to-clipboard",
-				"title": "BigQuery: Copy to Clipboard",
+				"command": "fabricSql.copy-to-clipboard",
+				"title": "Fabric SQL: Copy to Clipboard",
 				"icon": "$(clippy)"
 			},
 			{
-				"command": "vscode-bigquery.open-settings-connections",
-				"title": "BigQuery: Open Settings - Connections"
+				"command": "fabricSql.open-settings-connections",
+				"title": "Fabric SQL: Open Settings - Connections"
 			},
 			{
-				"command": "vscode-bigquery.add-fabric-connection",
-				"title": "BigQuery: Add Fabric Connection",
+				"command": "fabricSql.add-fabric-connection",
+				"title": "Fabric SQL: Add Fabric Connection",
 				"icon": "$(add)"
 			},
 			{
-				"command": "vscode-bigquery.format-query",
-				"title": "BigQuery: Format SQL",
+				"command": "fabricSql.format-query",
+				"title": "Fabric SQL: Format SQL",
 				"icon": "$(symbol-structure)"
 			},
 			{
-				"command": "vscode-bigquery.history-rerun",
-				"title": "BigQuery: Re-run Query",
+				"command": "fabricSql.history-rerun",
+				"title": "Fabric SQL: Re-run Query",
 				"icon": "$(debug-start)"
 			},
 			{
-				"command": "vscode-bigquery.history-copy",
-				"title": "BigQuery: Copy Query",
+				"command": "fabricSql.history-copy",
+				"title": "Fabric SQL: Copy Query",
 				"icon": "$(copy)"
 			},
 			{
-				"command": "vscode-bigquery.history-show",
-				"title": "BigQuery: Show Query"
+				"command": "fabricSql.history-show",
+				"title": "Fabric SQL: Show Query"
 			},
 			{
-				"command": "vscode-bigquery.history-delete",
-				"title": "BigQuery: Delete from History",
+				"command": "fabricSql.history-delete",
+				"title": "Fabric SQL: Delete from History",
 				"icon": "$(trash)"
 			},
 			{
-				"command": "vscode-bigquery.history-clear",
-				"title": "BigQuery: Clear All History",
+				"command": "fabricSql.history-clear",
+				"title": "Fabric SQL: Clear All History",
 				"icon": "$(clear-all)"
 			},
 			{
-				"command": "vscode-bigquery.history-refresh",
-				"title": "BigQuery: Refresh History",
+				"command": "fabricSql.history-refresh",
+				"title": "Fabric SQL: Refresh History",
 				"icon": "$(refresh)"
 			},
 			{
-				"command": "vscode-bigquery.job-history-refresh",
-				"title": "BigQuery: Refresh Job History",
+				"command": "fabricSql.job-history-refresh",
+				"title": "Fabric SQL: Refresh Job History",
 				"icon": "$(refresh)"
 			},
 			{
-				"command": "vscode-bigquery.job-history-toggle-all-users",
-				"title": "BigQuery: Job History — Toggle All Users",
+				"command": "fabricSql.job-history-toggle-all-users",
+				"title": "Fabric SQL: Job History — Toggle All Users",
 				"icon": "$(organization)"
 			},
 			{
-				"command": "vscode-bigquery.explain-query",
-				"title": "BigQuery: Show Estimated Plan",
+				"command": "fabricSql.explain-query",
+				"title": "Fabric SQL: Show Estimated Plan",
 				"icon": "$(graph)"
 			},
 			{
-				"command": "vscode-bigquery.explain-query-xml",
-				"title": "BigQuery: Show Estimated Plan XML"
+				"command": "fabricSql.explain-query-xml",
+				"title": "Fabric SQL: Show Estimated Plan XML"
 			},
 			{
-				"command": "vscode-bigquery.job-history-details",
-				"title": "BigQuery: Job Details",
+				"command": "fabricSql.job-history-details",
+				"title": "Fabric SQL: Job Details",
 				"icon": "$(info)"
 			},
 			{
-				"command": "vscode-bigquery.show-lineage",
-				"title": "BigQuery: Show Data Lineage",
+				"command": "fabricSql.show-lineage",
+				"title": "Fabric SQL: Show Data Lineage",
 				"icon": "$(type-hierarchy)"
 			},
 			{
-				"command": "vscode-bigquery.show-lineage-selection",
-				"title": "BigQuery: Show Data Lineage for Selection",
+				"command": "fabricSql.show-lineage-selection",
+				"title": "Fabric SQL: Show Data Lineage for Selection",
 				"icon": "$(type-hierarchy)"
 			},
 			{
-				"command": "vscode-bigquery.refresh-schema-cache",
-				"title": "BigQuery: Refresh Schema Cache",
+				"command": "fabricSql.refresh-schema-cache",
+				"title": "Fabric SQL: Refresh Schema Cache",
 				"icon": "$(refresh)"
 			},
 			{
-				"command": "vscode-bigquery.set-lineage-export-theme",
-				"title": "BigQuery: Toggle Lineage Export Theme",
+				"command": "fabricSql.set-lineage-export-theme",
+				"title": "Fabric SQL: Toggle Lineage Export Theme",
 				"icon": "$(arrow-swap)"
 			},
 			{
-				"command": "vscode-bigquery.revoke-session",
-				"title": "BigQuery: Sign Out",
+				"command": "fabricSql.revoke-session",
+				"title": "Fabric SQL: Sign Out",
 				"icon": "$(sign-out)"
 			},
 			{
-				"command": "vscode-bigquery.pin-table",
-				"title": "BigQuery: Pin Table",
+				"command": "fabricSql.pin-table",
+				"title": "Fabric SQL: Pin Table",
 				"icon": "$(pin)"
 			},
 			{
-				"command": "vscode-bigquery.unpin-table",
-				"title": "BigQuery: Unpin Table",
+				"command": "fabricSql.unpin-table",
+				"title": "Fabric SQL: Unpin Table",
 				"icon": "$(pinned)"
 			},
 			{
-				"command": "vscode-bigquery.search-tables",
-				"title": "BigQuery: Search Tables",
+				"command": "fabricSql.search-tables",
+				"title": "Fabric SQL: Search Tables",
 				"icon": "$(search)"
 			},
 			{
-				"command": "vscode-bigquery.clear-search",
-				"title": "BigQuery: Clear Search",
+				"command": "fabricSql.clear-search",
+				"title": "Fabric SQL: Clear Search",
 				"icon": "$(close)"
 			},
 			{
-				"command": "vscode-bigquery.copy-table-path",
-				"title": "BigQuery: Copy Table Path",
+				"command": "fabricSql.copy-table-path",
+				"title": "Fabric SQL: Copy Table Path",
 				"icon": "$(copy)"
 			},
 			{
-				"command": "vscode-bigquery.build-table-index",
-				"title": "BigQuery: Build Table Index",
+				"command": "fabricSql.build-table-index",
+				"title": "Fabric SQL: Build Table Index",
 				"icon": "$(database)"
 			},
 			{
-				"command": "vscode-bigquery.clear-extension-cache",
-				"title": "BigQuery: Clear Extension State Cache"
+				"command": "fabricSql.clear-extension-cache",
+				"title": "Fabric SQL: Clear Extension State Cache"
 			},
 			{
-				"command": "vscode-bigquery.open-as-notebook",
-				"title": "BigQuery: Open as Notebook",
+				"command": "fabricSql.open-as-notebook",
+				"title": "Fabric SQL: Open as Notebook",
 				"icon": "$(notebook)"
 			},
 			{
-				"command": "vscode-bigquery.open-as-text",
-				"title": "BigQuery: Open as Text",
+				"command": "fabricSql.open-as-text",
+				"title": "Fabric SQL: Open as Text",
 				"icon": "$(code)"
 			}
 		],
 		"notebooks": [
 			{
-				"type": "bigquery-sql-notebook",
-				"displayName": "BigQuery SQL Notebook",
+				"type": "fabric-sql-notebook",
+				"displayName": "T-SQL Notebook",
 				"selector": [
 					{
-						"filenamePattern": "*.bqsql"
+						"filenamePattern": "*.fsql"
 					},
 					{
 						"filenamePattern": "*.sql"
@@ -710,11 +711,11 @@
 		],
 		"notebookRenderer": [
 			{
-				"id": "bigquery-grid-renderer",
-				"displayName": "BigQuery Results Grid",
+				"id": "fabric-sql-grid-renderer",
+				"displayName": "Fabric SQL Results Grid",
 				"entrypoint": "./resources/notebook-renderer.js",
 				"mimeTypes": [
-					"application/vnd.bigquery.grid+json"
+					"application/vnd.fabric-sql.grid+json"
 				],
 				"requiresMessaging": "optional"
 			}
@@ -722,182 +723,182 @@
 		"menus": {
 			"editor/title": [
 				{
-					"command": "vscode-bigquery.run-query",
+					"command": "fabricSql.run-query",
 					"group": "navigation@-3",
-					"when": "editorLangId == bqsql || editorLangId == sql"
+					"when": "editorLangId == fsql || editorLangId == sql"
 				},
 				{
-					"command": "vscode-bigquery.run-selected-query",
+					"command": "fabricSql.run-selected-query",
 					"group": "navigation@-2",
-					"when": "editorLangId == bqsql || editorLangId == sql"
+					"when": "editorLangId == fsql || editorLangId == sql"
 				},
 				{
-					"command": "vscode-bigquery.show-lineage",
+					"command": "fabricSql.show-lineage",
 					"group": "navigation@-1",
-					"when": "editorLangId == bqsql || editorLangId == sql"
+					"when": "editorLangId == fsql || editorLangId == sql"
 				},
 				{
-					"command": "vscode-bigquery.open-as-notebook",
+					"command": "fabricSql.open-as-notebook",
 					"group": "navigation@100",
-					"when": "editorLangId == bqsql || editorLangId == sql"
+					"when": "editorLangId == fsql || editorLangId == sql"
 				},
 				{
-					"command": "vscode-bigquery.open-as-text",
+					"command": "fabricSql.open-as-text",
 					"group": "navigation@100",
-					"when": "notebookType == bigquery-sql-notebook"
+					"when": "notebookType == fabric-sql-notebook"
 				}
 			],
 			"editor/context": [
 				{
-					"command": "vscode-bigquery.show-lineage-selection",
+					"command": "fabricSql.show-lineage-selection",
 					"group": "1_modification",
-					"when": "editorHasSelection && (editorLangId == bqsql || editorLangId == sql)"
+					"when": "editorHasSelection && (editorLangId == fsql || editorLangId == sql)"
 				},
 				{
-					"command": "vscode-bigquery.profile-column",
+					"command": "fabricSql.profile-column",
 					"group": "1_modification",
-					"when": "editorLangId == bqsql || editorLangId == sql"
+					"when": "editorLangId == fsql || editorLangId == sql"
 				},
 				{
-					"command": "vscode-bigquery.preview-table-at-cursor",
+					"command": "fabricSql.preview-table-at-cursor",
 					"group": "1_modification",
-					"when": "editorLangId == bqsql || editorLangId == sql"
+					"when": "editorLangId == fsql || editorLangId == sql"
 				},
 				{
-					"command": "vscode-bigquery.explain-query",
+					"command": "fabricSql.explain-query",
 					"group": "1_modification",
-					"when": "editorLangId == bqsql || editorLangId == sql"
+					"when": "editorLangId == fsql || editorLangId == sql"
 				}
 			],
 			"view/title": [
 				{
-					"command": "vscode-bigquery.authentication-refresh",
+					"command": "fabricSql.authentication-refresh",
 					"group": "navigation",
-					"when": "view == 'bigquery-authentication'"
+					"when": "view == 'fabric-sql-authentication'"
 				},
 				{
-					"command": "vscode-bigquery.add-fabric-connection",
+					"command": "fabricSql.add-fabric-connection",
 					"group": "navigation@1",
-					"when": "view == 'bigquery-tree-data-provider'"
+					"when": "view == 'fabric-sql-tree-data-provider'"
 				},
 				{
-					"command": "vscode-bigquery.explorer-refresh",
+					"command": "fabricSql.explorer-refresh",
 					"group": "navigation",
-					"when": "view == 'bigquery-tree-data-provider'"
+					"when": "view == 'fabric-sql-tree-data-provider'"
 				},
 				{
-					"command": "vscode-bigquery.search-tables",
+					"command": "fabricSql.search-tables",
 					"group": "navigation",
-					"when": "view == 'bigquery-tree-data-provider'"
+					"when": "view == 'fabric-sql-tree-data-provider'"
 				},
 				{
-					"command": "vscode-bigquery.clear-search",
+					"command": "fabricSql.clear-search",
 					"group": "navigation",
-					"when": "view == 'bigquery-tree-data-provider' && bigquery.isSearching"
+					"when": "view == 'fabric-sql-tree-data-provider' && fabric-sql.isSearching"
 				},
 				{
-					"command": "vscode-bigquery.history-refresh",
+					"command": "fabricSql.history-refresh",
 					"group": "navigation",
-					"when": "view == 'bigquery-query-history'"
+					"when": "view == 'fabric-sql-query-history'"
 				},
 				{
-					"command": "vscode-bigquery.history-clear",
+					"command": "fabricSql.history-clear",
 					"group": "navigation",
-					"when": "view == 'bigquery-query-history'"
+					"when": "view == 'fabric-sql-query-history'"
 				},
 				{
-					"command": "vscode-bigquery.job-history-refresh",
+					"command": "fabricSql.job-history-refresh",
 					"group": "navigation",
-					"when": "view == 'bigquery-job-history'"
+					"when": "view == 'fabric-sql-job-history'"
 				},
 				{
-					"command": "vscode-bigquery.job-history-toggle-all-users",
+					"command": "fabricSql.job-history-toggle-all-users",
 					"group": "navigation",
-					"when": "view == 'bigquery-job-history'"
+					"when": "view == 'fabric-sql-job-history'"
 				}
 			],
 			"view/item/context": [
 				{
-					"command": "vscode-bigquery.job-history-details",
+					"command": "fabricSql.job-history-details",
 					"when": "viewItem == 'job-history-job'",
 					"group": "inline"
 				},
 				{
-					"command": "vscode-bigquery.view-table",
+					"command": "fabricSql.view-table",
 					"when": "viewItem == 'sql-table' || viewItem == 'sql-pinned-table' || viewItem == 'sql-table-already-pinned'"
 				},
 				{
-					"command": "vscode-bigquery.view-table-schema",
+					"command": "fabricSql.view-table-schema",
 					"when": "viewItem == 'sql-table' || viewItem == 'sql-pinned-table' || viewItem == 'sql-table-already-pinned'"
 				},
 				{
-					"command": "vscode-bigquery.create-table-default-query",
+					"command": "fabricSql.create-table-default-query",
 					"when": "viewItem == 'sql-table' || viewItem == 'sql-pinned-table' || viewItem == 'sql-table-already-pinned'"
 				},
 				{
-					"command": "vscode-bigquery.open-ddl",
+					"command": "fabricSql.open-ddl",
 					"when": "viewItem == 'sql-table' || viewItem == 'sql-pinned-table' || viewItem == 'sql-table-already-pinned' || viewItem == 'sql-routine'"
 				},
 				{
-					"command": "vscode-bigquery.pin-table",
+					"command": "fabricSql.pin-table",
 					"when": "viewItem == 'sql-table'",
 					"group": "inline"
 				},
 				{
-					"command": "vscode-bigquery.unpin-table",
+					"command": "fabricSql.unpin-table",
 					"when": "viewItem == 'sql-pinned-table' || viewItem == 'sql-table-already-pinned'",
 					"group": "inline"
 				},
 				{
-					"command": "vscode-bigquery.copy-table-path",
+					"command": "fabricSql.copy-table-path",
 					"when": "viewItem == 'sql-table' || viewItem == 'sql-pinned-table' || viewItem == 'sql-table-already-pinned'"
 				},
 				{
-					"command": "vscode-bigquery.set-default-project",
+					"command": "fabricSql.set-default-project",
 					"when": "viewItem == 'sql-connection'",
 					"group": "inline"
 				},
 				{
-					"command": "vscode-bigquery.history-rerun",
+					"command": "fabricSql.history-rerun",
 					"when": "viewItem == 'history-query'",
 					"group": "inline"
 				},
 				{
-					"command": "vscode-bigquery.history-copy",
+					"command": "fabricSql.history-copy",
 					"when": "viewItem == 'history-query'",
 					"group": "inline"
 				},
 				{
-					"command": "vscode-bigquery.history-delete",
+					"command": "fabricSql.history-delete",
 					"when": "viewItem == 'history-query'",
 					"group": "inline"
 				}
 			]
 		},
 		"views": {
-			"bigquery-main-activity-bar": [
+			"fabric-sql-main-activity-bar": [
 				{
-					"id": "bigquery-authentication",
+					"id": "fabric-sql-authentication",
 					"name": "Authentication",
-					"contextualTitle": "BigQuery",
+					"contextualTitle": "Fabric SQL",
 					"type": "webview"
 				},
 				{
-					"id": "bigquery-tree-data-provider",
+					"id": "fabric-sql-tree-data-provider",
 					"name": "Explorer",
-					"contextualTitle": "BigQuery",
+					"contextualTitle": "Fabric SQL",
 					"type": "tree"
 				},
 				{
-					"id": "bigquery-query-history",
+					"id": "fabric-sql-query-history",
 					"name": "Query History",
-					"contextualTitle": "BigQuery",
+					"contextualTitle": "Fabric SQL",
 					"type": "tree"
 				},
 				{
-					"id": "bigquery-job-history",
+					"id": "fabric-sql-job-history",
 					"name": "Job History (server)",
-					"contextualTitle": "BigQuery",
+					"contextualTitle": "Fabric SQL",
 					"type": "tree",
 					"visibility": "collapsed"
 				}
@@ -906,33 +907,33 @@
 		"viewsContainers": {
 			"activitybar": [
 				{
-					"id": "bigquery-main-activity-bar",
-					"title": "BigQuery",
-					"icon": "./resources/google-bigquery.svg"
+					"id": "fabric-sql-main-activity-bar",
+					"title": "Fabric SQL",
+					"icon": "./resources/fabric-sql.svg"
 				}
 			]
 		},
 		"keybindings": [
 			{
-				"command": "vscode-bigquery.run-query",
+				"command": "fabricSql.run-query",
 				"key": "Ctrl+Enter",
-				"when": "editorLangId == bqsql || editorLangId == sql"
+				"when": "editorLangId == fsql || editorLangId == sql"
 			},
 			{
-				"command": "vscode-bigquery.run-selected-query",
+				"command": "fabricSql.run-selected-query",
 				"key": "Ctrl+E",
-				"when": "editorLangId == bqsql || editorLangId == sql"
+				"when": "editorLangId == fsql || editorLangId == sql"
 			},
 			{
-				"command": "vscode-bigquery.format-query",
+				"command": "fabricSql.format-query",
 				"key": "Shift+Alt+F",
-				"when": "editorLangId == bqsql || editorLangId == sql"
+				"when": "editorLangId == fsql || editorLangId == sql"
 			}
 		],
 		"viewsWelcome": [
 			{
-				"view": "bigquery-tree-data-provider",
-				"contents": "No connections configured.\n\nSign in from the Authentication view, then\n[Add Fabric Connection](command:vscode-bigquery.add-fabric-connection) to pick a workspace and warehouse / lakehouse,\nor [edit settings](command:vscode-bigquery.open-settings-connections) to add an Azure SQL / SQL Server host."
+				"view": "fabric-sql-tree-data-provider",
+				"contents": "No connections configured.\n\nSign in from the Authentication view, then\n[Add Fabric Connection](command:fabricSql.add-fabric-connection) to pick a workspace and warehouse / lakehouse,\nor [edit settings](command:fabricSql.open-settings-connections) to add an Azure SQL / SQL Server host."
 			}
 		]
 	},

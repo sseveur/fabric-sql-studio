@@ -15,12 +15,12 @@ const GRID_COLOR_KEY_TO_VAR: Record<string, string> = {
 };
 
 /**
- * Reads the `vscode-bigquery.gridColors` setting and returns sanitized `{ cssVar: value }` overrides
+ * Reads the `fabricSql.gridColors` setting and returns sanitized `{ cssVar: value }` overrides
  * (allowlist regex + 80-char cap). Shared by the results-panel webview and the notebook renderer so
  * both honor the same per-type cell colors.
  */
 export function sanitizedGridColorVars(): Record<string, string> {
-    const cfg = vscode.workspace.getConfiguration('vscode-bigquery').get<Record<string, string>>('gridColors', {});
+    const cfg = vscode.workspace.getConfiguration('fabricSql').get<Record<string, string>>('gridColors', {});
     const out: Record<string, string> = {};
     if (!cfg || typeof cfg !== 'object') { return out; }
     for (const [k, v] of Object.entries(cfg)) {

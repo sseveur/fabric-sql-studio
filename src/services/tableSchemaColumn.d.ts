@@ -1,4 +1,4 @@
-export interface BigqueryTableSchema {
+export interface TableSchemaColumn {
     project_id: string,
     dataset_name: string,
     table_name: string,

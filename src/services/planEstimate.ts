@@ -176,7 +176,7 @@ export function renderPlanHtml(statements: PlanStatement[], connectionId: string
 <h1>Estimated execution plan</h1>
 <div class="sub">${esc(connectionId)} · nothing was executed · costs are optimizer units, comparable between plans on the same endpoint</div>
 ${blocks || noPlanHtml(raw)}
-<p class="note">"Own cost" is the operator's share of the statement's subtree cost. Use <b>BigQuery: Show Estimated Plan XML</b> for the raw SHOWPLAN.</p>
+<p class="note">"Own cost" is the operator's share of the statement's subtree cost. Use <b>Fabric SQL: Show Estimated Plan XML</b> for the raw SHOWPLAN.</p>
 </body></html>`;
 }
 

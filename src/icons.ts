@@ -1,11 +1,11 @@
 import path = require("path");
 import { getExtensionUri } from "./extension";
 
-export class BigqueryIcons {
+export class Icons {
 
-    public bigquery: { light: string; dark: string } = {
-        light: path.join(getExtensionUri().path, 'resources', 'light', 'bigquery.svg'),
-        dark: path.join(getExtensionUri().path, 'resources', 'dark', 'bigquery.svg')
+    public fabricSql: { light: string; dark: string } = {
+        light: path.join(getExtensionUri().path, 'resources', 'light', 'fabric-sql.svg'),
+        dark: path.join(getExtensionUri().path, 'resources', 'dark', 'fabric-sql.svg')
     };
 
     public datasetLink: { light: string; dark: string } = {

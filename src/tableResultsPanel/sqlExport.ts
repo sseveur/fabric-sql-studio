@@ -30,7 +30,7 @@ export async function exportSqlResult(kind: ExportKind, resultId: string, setInd
 
     try {
         fs.writeFileSync(uri.fsPath, kind === 'csv' ? toCsv(set) : toJsonl(set));
-        const note = set.truncated ? ` (first ${set.rows.length.toLocaleString()} rows only — raise vscode-bigquery.maxRows for more)` : '';
+        const note = set.truncated ? ` (first ${set.rows.length.toLocaleString()} rows only — raise fabricSql.maxRows for more)` : '';
         vscode.window.showInformationMessage(`Saved ${set.rows.length.toLocaleString()} rows to ${uri.fsPath}${note}`);
     } catch (e: any) {
         vscode.window.showErrorMessage(`Export failed: ${e.message}`);
@@ -53,7 +53,7 @@ function cell(v: unknown): string {
 }
 
 async function copyCsv(set: SqlResultSet): Promise<void> {
-    const limitKb = vscode.workspace.getConfiguration('vscode-bigquery').get<number>('clipboardSizeLimitKb', 1024);
+    const limitKb = vscode.workspace.getConfiguration('fabricSql').get<number>('clipboardSizeLimitKb', 1024);
     const limit = limitKb * 1024;
     const s = createArrayCsvStringifier({ header: set.columns.map(c => c.name) });
     let text = s.getHeaderString() ?? '';

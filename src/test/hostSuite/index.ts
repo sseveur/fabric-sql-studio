@@ -4,7 +4,7 @@ import * as glob from 'glob';
 
 /**
  * Scoped Extension Host suite: runs every *.test.js in this folder in a real
- * VS Code instance. Unlike ../suite, these tests need no BigQuery credentials
+ * VS Code instance. Unlike ../suite, these tests need no Fabric SQL credentials
  * or network — they exercise language providers via the vscode.execute* APIs.
  */
 export function run(): Promise<void> {

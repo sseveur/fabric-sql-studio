@@ -1,9 +1,9 @@
-import { BqsqlDocument, BqsqlDocumentItem } from './bqsqlDocument';
-import { BqsqlSuggestion } from './bqsqlSuggestion';
+import { FsqlDocument, FsqlDocumentItem } from './fsqlDocument';
+import { FsqlSuggestion } from './fsqlSuggestion';
 
 /**
  * T-SQL tokenizer + light structure builder that emits the same `{ item_type, range, items }`
- * tree the old BigQuery WASM parser produced, so the completion / hover / semantic-token /
+ * tree the old Fabric SQL WASM parser produced, so the completion / hover / semantic-token /
  * folding providers and the CTE extractor keep working unchanged.
  *
  * Ranges are per line: `[line, startChar, endChar]`. Statement nodes carry no range of their
@@ -157,7 +157,7 @@ export function tokenize(sql: string): Tok[] {
 // Items
 // ---------------------------------------------------------------------------------------------
 
-function leaf(t: Tok): BqsqlDocumentItem {
+function leaf(t: Tok): FsqlDocumentItem {
     let type: string;
     switch (t.kind) {
         case 'keyword': type = 'Keyword'; break;
@@ -174,7 +174,7 @@ function leaf(t: Tok): BqsqlDocumentItem {
     return { item_type: type, range: [t.line, t.start, t.end], items: [] };
 }
 
-function node(type: string, items: BqsqlDocumentItem[]): BqsqlDocumentItem {
+function node(type: string, items: FsqlDocumentItem[]): FsqlDocumentItem {
     return { item_type: type, range: [], items };
 }
 
@@ -222,7 +222,7 @@ export function splitChain(text: string): string[] {
  * Consume `ident(.ident)*` starting at `i`. Returns the item and the next index, or null when the
  * token at `i` cannot start a table name.
  */
-function readTableIdentifier(toks: Tok[], i: number, cteNames: Set<string>): { item: BqsqlDocumentItem; next: number } | null {
+function readTableIdentifier(toks: Tok[], i: number, cteNames: Set<string>): { item: FsqlDocumentItem; next: number } | null {
     const first = toks[i];
     if (!first || first.kind !== 'ident') { return null; }
 
@@ -246,7 +246,7 @@ function readTableIdentifier(toks: Tok[], i: number, cteNames: Set<string>): { i
     else if (parts === 2) { type = 'TableIdentifierDatasetIdTableId'; }
     else { type = 'TableIdentifierProjectIdDatasetIdTableId'; }
 
-    const children: BqsqlDocumentItem[] = [{ item_type: type, range: chainRange, items: [] }];
+    const children: FsqlDocumentItem[] = [{ item_type: type, range: chainRange, items: [] }];
     let next = j + 1;
 
     // alias: `t AS a` or `t a` (not a keyword, not punctuation)
@@ -261,8 +261,8 @@ function readTableIdentifier(toks: Tok[], i: number, cteNames: Set<string>): { i
     return { item: node('TableIdentifier', children), next };
 }
 
-function buildItems(toks: Tok[], cteNames: Set<string>): BqsqlDocumentItem[] {
-    const items: BqsqlDocumentItem[] = [];
+function buildItems(toks: Tok[], cteNames: Set<string>): FsqlDocumentItem[] {
+    const items: FsqlDocumentItem[] = [];
     let i = 0;
     while (i < toks.length) {
         const t = toks[i];
@@ -323,8 +323,8 @@ function collectCteNames(toks: Tok[]): Set<string> {
     return names;
 }
 
-function buildWith(toks: Tok[], cteNames: Set<string>): BqsqlDocumentItem {
-    const items: BqsqlDocumentItem[] = [leaf(toks[0])];
+function buildWith(toks: Tok[], cteNames: Set<string>): FsqlDocumentItem {
+    const items: FsqlDocumentItem[] = [leaf(toks[0])];
     let i = 1;
     if (isKw(toks[i], 'RECURSIVE')) { items.push(leaf(toks[i])); i++; }
     while (i < toks.length) {
@@ -408,9 +408,9 @@ export function splitStatements(toks: Tok[]): Tok[][] {
     return out;
 }
 
-export function parse(sql: string): BqsqlDocument {
+export function parse(sql: string): FsqlDocument {
     const toks = tokenize(sql);
-    const items: BqsqlDocumentItem[] = [];
+    const items: FsqlDocumentItem[] = [];
     for (const stmt of splitStatements(toks)) {
         const code = stmt.filter(t => t.kind !== 'comment');
         const comments = stmt.filter(t => t.kind === 'comment').map(leaf);
@@ -427,7 +427,7 @@ export function parse(sql: string): BqsqlDocument {
 // Completion support
 // ---------------------------------------------------------------------------------------------
 
-export function collectTableIdentifiers(items: BqsqlDocumentItem[], out: BqsqlDocumentItem[] = []): BqsqlDocumentItem[] {
+export function collectTableIdentifiers(items: FsqlDocumentItem[], out: FsqlDocumentItem[] = []): FsqlDocumentItem[] {
     for (const it of items) {
         if (it.item_type === 'TableIdentifier') { out.push(it); }
         if (it.items?.length) { collectTableIdentifiers(it.items, out); }
@@ -454,7 +454,7 @@ const CHAIN_BEFORE_DOT = /((?:\[[^\]]*\]|"[^"]*"|[\w@#$]+)(?:\.(?:\[[^\]]*\]|"[^
  * `alias.` / `table.` / `[db].[s].[t].` before the cursor → the matching TableIdentifier, so the
  * completion provider can list its columns.
  */
-export function suggest(sql: string, line: number, character: number): BqsqlSuggestion[] {
+export function suggest(sql: string, line: number, character: number): FsqlSuggestion[] {
     const lineText = (sql.split('\n')[line] ?? '').replace(/\r$/, '');
     const m = CHAIN_BEFORE_DOT.exec(lineText.slice(0, character));
     if (!m) { return []; }

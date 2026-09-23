@@ -1,4 +1,4 @@
-import { BqsqlDocumentItem } from '../language/bqsqlDocument';
+import { FsqlDocumentItem } from '../language/fsqlDocument';
 import { collectTableIdentifiers, lineOffsets, parse, splitChain, textAt, Tok, tokenize, unquotePart } from '../language/tsqlParser';
 import { bracket } from './objectRef';
 import { connectionForDatabase } from './queryRouter';
@@ -141,7 +141,7 @@ function toTable(parts: string[], defaultDatabase: string | undefined): Resolved
     return database ? { database, schema, table } : null;
 }
 
-function leafLines(item: BqsqlDocumentItem, out: number[] = []): number[] {
+function leafLines(item: FsqlDocumentItem, out: number[] = []): number[] {
     if (item.range.length >= 3) { out.push(item.range[0]); }
     for (const c of item.items) { leafLines(c, out); }
     return out;

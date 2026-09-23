@@ -377,7 +377,6 @@ new_features/
 *.vsix
 
 # Cargo lock files
-bqsql_parser/Cargo.lock
 **/.DS_Store
 
 # Build artifacts

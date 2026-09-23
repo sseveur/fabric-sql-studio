@@ -1,8 +1,8 @@
 import { parse } from './tsqlParser';
 import { CancellationToken, DocumentSemanticTokensProvider, Event, Position, Range, ProviderResult, SemanticTokens, SemanticTokensBuilder, TextDocument, SemanticTokensLegend } from "vscode";
-import { bigqueryTableSchemaService } from "../extension";
-import { BqsqlDocument, BqsqlDocumentItem } from "./bqsqlDocument";
-import { isBigQueryLanguage } from "../services/languageUtils";
+import { tableSchemaService } from "../extension";
+import { FsqlDocument, FsqlDocumentItem } from "./fsqlDocument";
+import { isFabricSqlLanguage } from "../services/languageUtils";
 
 interface CommentRange {
     startLine: number;
@@ -11,27 +11,27 @@ interface CommentRange {
     endChar: number;
 }
 
-export class BqsqlDocumentSemanticTokensProvider implements DocumentSemanticTokensProvider {
+export class FsqlDocumentSemanticTokensProvider implements DocumentSemanticTokensProvider {
 
     onDidChangeSemanticTokens?: Event<void> | undefined;
 
     provideDocumentSemanticTokens(document: TextDocument, token: CancellationToken): ProviderResult<SemanticTokens> {
 
-        if (!isBigQueryLanguage(document.languageId)) { return null; }
+        if (!isFabricSqlLanguage(document.languageId)) { return null; }
 
-        const tokensBuilder = new SemanticTokensBuilder(BqsqlDocumentSemanticTokensProvider.getSemanticTokensLegend());
+        const tokensBuilder = new SemanticTokensBuilder(FsqlDocumentSemanticTokensProvider.getSemanticTokensLegend());
 
         const text = document.getText();
         const blockCommentRanges = this.findBlockCommentRanges(text);
 
-        const parsed = parse(text) as BqsqlDocument;
+        const parsed = parse(text) as FsqlDocument;
 
         const qTableIdentifier = this.findTableIdentifiers(parsed.items);
         if (qTableIdentifier.length > 0) {
             for (let index = 0; index < qTableIdentifier.length; index++) {
                 const element = qTableIdentifier[index];
 
-                let _ = bigqueryTableSchemaService.preLoadSchemaToCache(document.getText(), element).then().catch(ex => console.error(ex));
+                let _ = tableSchemaService.preLoadSchemaToCache(document.getText(), element).then().catch(ex => console.error(ex));
             }
         }
 
@@ -113,11 +113,11 @@ export class BqsqlDocumentSemanticTokensProvider implements DocumentSemanticToke
         return false;
     }
 
-    findTableIdentifiers(items: BqsqlDocumentItem[]): BqsqlDocumentItem[] {
+    findTableIdentifiers(items: FsqlDocumentItem[]): FsqlDocumentItem[] {
 
-        let documentItems: BqsqlDocumentItem[] = [];
+        let documentItems: FsqlDocumentItem[] = [];
         for (let index = 0; index < items.length; index++) {
-            const element: BqsqlDocumentItem = items[index];
+            const element: FsqlDocumentItem = items[index];
             if (element.item_type === "TableIdentifier") {
                 documentItems.push(element);
             } else {
@@ -144,7 +144,7 @@ export class BqsqlDocumentSemanticTokensProvider implements DocumentSemanticToke
         'NULL', 'TRUE', 'FALSE', 'ALL', 'ANY', 'SOME',
     ]);
 
-    buildTokens(tokensBuilder: SemanticTokensBuilder, items: BqsqlDocumentItem[], blockCommentRanges: CommentRange[], document?: TextDocument) {
+    buildTokens(tokensBuilder: SemanticTokensBuilder, items: FsqlDocumentItem[], blockCommentRanges: CommentRange[], document?: TextDocument) {
         for (let index = 0; index < items.length; index++) {
             const element = items[index];
             if (element.range && element.range.length > 0) {
@@ -162,7 +162,7 @@ export class BqsqlDocumentSemanticTokensProvider implements DocumentSemanticToke
                     let tokenType: string = 'operator';
                     if (document) {
                         const text = document.getText(range).toUpperCase();
-                        if (BqsqlDocumentSemanticTokensProvider.LOGICAL_KEYWORDS.has(text)) {
+                        if (FsqlDocumentSemanticTokensProvider.LOGICAL_KEYWORDS.has(text)) {
                             tokenType = 'keyword';
                         }
                     }

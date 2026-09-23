@@ -36,7 +36,7 @@ export interface TokenInfo {
 const cache = new Map<string, TokenInfo>();
 
 export function currentProfile(): AuthProfile {
-    const cfg = vscode.workspace.getConfiguration('vscode-bigquery');
+    const cfg = vscode.workspace.getConfiguration('fabricSql');
     const mode = cfg.get<AuthMode>('authMode', 'entra-interactive');
     const tenantId = (cfg.get<string>('tenantId', '') || '').trim() || undefined;
     return { mode, tenantId };
@@ -44,7 +44,7 @@ export function currentProfile(): AuthProfile {
 
 export async function setAuthMode(mode: AuthMode): Promise<void> {
     cache.clear();
-    await vscode.workspace.getConfiguration('vscode-bigquery')
+    await vscode.workspace.getConfiguration('fabricSql')
         .update('authMode', mode, vscode.ConfigurationTarget.Global);
 }
 

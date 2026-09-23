@@ -1,15 +1,15 @@
 import * as vscode from 'vscode';
 import { splitQueries } from '../services/querySplitter';
 
-export const NOTEBOOK_TYPE = 'bigquery-sql-notebook';
-export const CELL_LANGUAGE = 'bqsql';
+export const NOTEBOOK_TYPE = 'fabric-sql-notebook';
+export const CELL_LANGUAGE = 'fsql';
 
 const CELL_MARKER = '-- %%';
 const CELL_MARKER_LINE_REGEX = /^[ \t]*--[ \t]*%%[ \t]*$/m;
 const CELL_MARKER_SPLIT_REGEX = /^[ \t]*--[ \t]*%%[ \t]*\r?\n?/gm;
 
 /**
- * Serializes .sql/.bqsql files as notebooks.
+ * Serializes .sql/.fsql files as notebooks.
  *
  * Cell layout persistence:
  *   - When the user's cell layout matches what splitQueries() would auto-produce,
@@ -20,7 +20,7 @@ const CELL_MARKER_SPLIT_REGEX = /^[ \t]*--[ \t]*%%[ \t]*\r?\n?/gm;
  *   - On load, presence of any `-- %%` line switches to marker-based splitting;
  *     otherwise we fall back to the parser-driven split.
  */
-export class BqSqlNotebookSerializer implements vscode.NotebookSerializer {
+export class FsqlNotebookSerializer implements vscode.NotebookSerializer {
 
     async deserializeNotebook(
         content: Uint8Array,

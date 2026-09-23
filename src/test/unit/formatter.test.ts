@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { formatBigQuerySQL, type FormatOptions } from '../../language/bqsqlFormatter';
+import { formatFabricSqlSQL, type FormatOptions } from '../../language/fsqlFormatter';
 
 // Baseline options used by most cases. Individual tests override per-key.
 const BASE: Partial<FormatOptions> = {
@@ -16,22 +16,22 @@ const BASE: Partial<FormatOptions> = {
 
 const lines = (s: string) => s.split('\n');
 
-suite('bqsqlFormatter', () => {
+suite('fsqlFormatter', () => {
 
     test('keyword case → upper', () => {
-        const out = formatBigQuerySQL('select 1 from t', BASE);
+        const out = formatFabricSqlSQL('select 1 from t', BASE);
         assert.ok(/^SELECT\b/m.test(out), out);
         assert.ok(/\bFROM\b/.test(out), out);
     });
 
     test('leading commas off → trailing commas on SELECT list', () => {
-        const out = formatBigQuerySQL('SELECT a, b, c FROM t', { ...BASE, leadingCommas: false });
+        const out = formatFabricSqlSQL('SELECT a, b, c FROM t', { ...BASE, leadingCommas: false });
         // No line should begin with a comma.
         assert.ok(!lines(out).some(l => l.trimStart().startsWith(',')), out);
     });
 
     test('leading commas on → comma-first continuation lines', () => {
-        const out = formatBigQuerySQL('SELECT a, b, c FROM t', { ...BASE, leadingCommas: true });
+        const out = formatFabricSqlSQL('SELECT a, b, c FROM t', { ...BASE, leadingCommas: true });
         const leadingCommaLines = lines(out).filter(l => l.trimStart().startsWith(', '));
         assert.ok(leadingCommaLines.length >= 2, out);
     });
@@ -40,7 +40,7 @@ suite('bqsqlFormatter', () => {
         const sql = 'SELECT * FROM t WHERE a = 1 AND b = 2';
 
         test('indented (default): AND sits on its own line, indented, never at column 0', () => {
-            const out = formatBigQuerySQL(sql, { ...BASE, logicalOperatorStyle: 'indented' });
+            const out = formatFabricSqlSQL(sql, { ...BASE, logicalOperatorStyle: 'indented' });
             const andLine = lines(out).find(l => /\bAND\b/.test(l));
             assert.ok(andLine, 'expected an AND line\n' + out);
             assert.ok(/^\s+AND\b/.test(andLine!), `AND should be indented, got: "${andLine}"`);
@@ -48,7 +48,7 @@ suite('bqsqlFormatter', () => {
         });
 
         test('contentAligned: AND aligns to the WHERE content column', () => {
-            const out = formatBigQuerySQL(sql, { ...BASE, logicalOperatorStyle: 'contentAligned' });
+            const out = formatFabricSqlSQL(sql, { ...BASE, logicalOperatorStyle: 'contentAligned' });
             const andLine = lines(out).find(l => /\bAND\b/.test(l));
             assert.ok(andLine && /^\s+AND\b/.test(andLine), out);
         });
@@ -66,7 +66,7 @@ suite('bqsqlFormatter', () => {
 
         for (const indentStyle of ['tabularLeft', 'tabularRight'] as const) {
             test(`${indentStyle}: no ON/AND line lands at column 0`, () => {
-                const out = formatBigQuerySQL(cte, { ...BASE, indentStyle });
+                const out = formatFabricSqlSQL(cte, { ...BASE, indentStyle });
                 const offenders = lines(out).filter(l => /^(ON|AND)\b/.test(l));
                 assert.strictEqual(offenders.length, 0,
                     `ON/AND dumped at column 0:\n${out}`);
@@ -77,7 +77,7 @@ suite('bqsqlFormatter', () => {
         }
 
         test('indented: ON is indented deeper than its JOIN keyword (tabularLeft)', () => {
-            const out = formatBigQuerySQL(cte, { ...BASE, indentStyle: 'tabularLeft', logicalOperatorStyle: 'indented' });
+            const out = formatFabricSqlSQL(cte, { ...BASE, indentStyle: 'tabularLeft', logicalOperatorStyle: 'indented' });
             const outLines = lines(out);
             const joinLine = outLines.find(l => /^\s*INNER JOIN\b/.test(l))!;
             const onLine = outLines.find(l => /^\s*ON\b/.test(l))!;
@@ -98,7 +98,7 @@ suite('bqsqlFormatter', () => {
 
         for (const sql of cases) {
             test(sql.match(/(ROWS|RANGE) BETWEEN [^)]+/)![0], () => {
-                const out = formatBigQuerySQL(sql, BASE);
+                const out = formatFabricSqlSQL(sql, BASE);
                 // The full frame must appear intact on a single line.
                 assert.ok(
                     /(ROWS|RANGE)\s+BETWEEN\s+.+\s+AND\s+.+/i.test(out),
@@ -122,7 +122,7 @@ suite('bqsqlFormatter', () => {
                 ') AS rolling_12m_points',
                 'FROM daily_points dp',
             ].join('\n');
-            const out = formatBigQuerySQL(sql, { ...BASE, leadingCommas: true, indentStyle: 'tabularLeft' });
+            const out = formatFabricSqlSQL(sql, { ...BASE, leadingCommas: true, indentStyle: 'tabularLeft' });
             assert.ok(/365\s+PRECEDING\s+AND\s+CURRENT\s+ROW/i.test(out), `frame mangled:\n${out}`);
             assert.ok(!/PRECEDING\s*,\s*AND/i.test(out), `spurious comma before frame AND:\n${out}`);
         });
@@ -141,7 +141,7 @@ suite('bqsqlFormatter', () => {
 
         for (const indentStyle of ['tabularLeft', 'tabularRight'] as const) {
             test(`${indentStyle}: AND/OR stay nested in the args, never in the clause gutter`, () => {
-                const out = formatBigQuerySQL(sql, { ...BASE, indentStyle });
+                const out = formatFabricSqlSQL(sql, { ...BASE, indentStyle });
                 const outLines = lines(out);
                 const gutterCol = outLines.find(l => /^\s*FROM\b/i.test(l))!.match(/^\s*/)![0].length;
                 for (const l of outLines) {
@@ -156,7 +156,7 @@ suite('bqsqlFormatter', () => {
         }
 
         test('ORDER BY inside STRING_AGG keeps single spacing and stays indented', () => {
-            const out = formatBigQuerySQL(sql, { ...BASE, indentStyle: 'tabularLeft' });
+            const out = formatFabricSqlSQL(sql, { ...BASE, indentStyle: 'tabularLeft' });
             const orderBy = lines(out).find(l => /ORDER\s+BY\s+s\.handle/i.test(l));
             assert.ok(orderBy, 'ORDER BY line missing:\n' + out);
             assert.ok(!/ORDER\s+BY\s{2,}/i.test(orderBy!), `padded ORDER BY:\n${out}`);
@@ -164,8 +164,8 @@ suite('bqsqlFormatter', () => {
 
         test('function-arg layout is idempotent', () => {
             const opts = { ...BASE, indentStyle: 'tabularLeft' as const };
-            const once = formatBigQuerySQL(sql, opts);
-            assert.strictEqual(formatBigQuerySQL(once, opts), once);
+            const once = formatFabricSqlSQL(sql, opts);
+            assert.strictEqual(formatFabricSqlSQL(once, opts), once);
         });
     });
 
@@ -180,7 +180,7 @@ suite('bqsqlFormatter', () => {
         ].join('\n');
 
         test('tabularLeft: CTE-body clause keywords start at one tabWidth', () => {
-            const out = formatBigQuerySQL(sql, { ...BASE, indentStyle: 'tabularLeft' });
+            const out = formatFabricSqlSQL(sql, { ...BASE, indentStyle: 'tabularLeft' });
             const outLines = lines(out);
             const bodySelect = outLines.find(l => /^\s+SELECT\b/.test(l));
             assert.ok(bodySelect, 'no indented SELECT found:\n' + out);
@@ -188,7 +188,7 @@ suite('bqsqlFormatter', () => {
         });
 
         test('closing paren and follow-up CTE name align at column 0', () => {
-            const out = formatBigQuerySQL(sql, { ...BASE, indentStyle: 'tabularLeft' });
+            const out = formatFabricSqlSQL(sql, { ...BASE, indentStyle: 'tabularLeft' });
             assert.ok(lines(out).some(l => /^\)/.test(l)), `no column-0 ")":\n${out}`);
             assert.ok(lines(out).some(l => /^,?\s?b AS \($/i.test(l.trim()) && /^[,b]/.test(l)),
                 `follow-up CTE name not at column 0:\n${out}`);
@@ -196,7 +196,7 @@ suite('bqsqlFormatter', () => {
     });
 
     test('tabular: CREATE TABLE ... AS statement head is not split by gutter padding', () => {
-        const out = formatBigQuerySQL(
+        const out = formatFabricSqlSQL(
             'CREATE TABLE test AS SELECT 1 AS a',
             { ...BASE, indentStyle: 'tabularLeft' }
         );
@@ -213,8 +213,8 @@ suite('bqsqlFormatter', () => {
             ')',
             'SELECT * FROM joined ORDER BY id',
         ].join('\n');
-        const once = formatBigQuerySQL(sql, { ...BASE, indentStyle: 'tabularLeft' });
-        const twice = formatBigQuerySQL(once, { ...BASE, indentStyle: 'tabularLeft' });
+        const once = formatFabricSqlSQL(sql, { ...BASE, indentStyle: 'tabularLeft' });
+        const twice = formatFabricSqlSQL(once, { ...BASE, indentStyle: 'tabularLeft' });
         assert.strictEqual(twice, once, `formatter not idempotent:\n--- once ---\n${once}\n--- twice ---\n${twice}`);
     });
 });

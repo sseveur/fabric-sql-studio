@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { textToNotebookData } from '../../notebook/bqSqlNotebookSerializer';
+import { textToNotebookData } from '../../notebook/fsqlNotebookSerializer';
 
 const cellValues = (d: { cells: unknown[] }) => (d.cells as Array<{ value: string }>).map(c => c.value);
 

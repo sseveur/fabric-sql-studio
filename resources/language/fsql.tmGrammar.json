@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "name": "T-SQL",
-  "scopeName": "source.bqsql",
+  "scopeName": "source.fsql",
   "patterns": [
     { "include": "#comments" },
     { "include": "#strings" },

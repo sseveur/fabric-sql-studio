@@ -1,4 +1,4 @@
-import { BqsqlDocumentItem } from '../language/bqsqlDocument';
+import { FsqlDocumentItem } from '../language/fsqlDocument';
 import { parse, splitChain, textAt, unquotePart } from '../language/tsqlParser';
 
 /**
@@ -33,7 +33,7 @@ export function extractTableReferences(sql: string): TableReference[] {
 }
 
 /** Visits every source table (FROM/JOIN/APPLY) under `items`, recursing into sub-queries. */
-export function walkSources(items: BqsqlDocumentItem[], sql: string, visit: (ref: TableReference) => void): void {
+export function walkSources(items: FsqlDocumentItem[], sql: string, visit: (ref: TableReference) => void): void {
     let prevKw = '';
     for (const it of items) {
         if (it.item_type === 'TableIdentifier') {
@@ -51,7 +51,7 @@ export function walkSources(items: BqsqlDocumentItem[], sql: string, visit: (ref
     }
 }
 
-export function tableRefOf(tableIdentifier: BqsqlDocumentItem, sql: string): TableReference | null {
+export function tableRefOf(tableIdentifier: FsqlDocumentItem, sql: string): TableReference | null {
     const chain = tableIdentifier.items.find(c => c.item_type !== 'TableIdentifierAlias' && c.item_type !== 'Keyword');
     if (!chain) { return null; }
     const name = normalizeTableName(textAt(sql, chain.range));
@@ -73,7 +73,7 @@ export function extractCtesWithDependencies(sql: string): ExtractedCte[] {
     for (const stmt of parse(sql).items) {
         if (stmt.item_type !== 'QueryWith') { continue; }
         const cteNames = new Set(stmt.items.filter(c => c.item_type === 'TableCteId').map(c => unquotePart(textAt(sql, c.range)).toLowerCase()));
-        let current: BqsqlDocumentItem | null = null;
+        let current: FsqlDocumentItem | null = null;
         for (const child of stmt.items) {
             if (child.item_type === 'TableCteId') { current = child; continue; }
             if (child.item_type !== 'Query' || !current) { continue; }

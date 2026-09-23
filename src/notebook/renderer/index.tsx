@@ -8,12 +8,12 @@ import gridCssText from '../../../resources/grid-v2.css';
 
 /**
  * MIME type the notebook controller tags its result output with. Keep in sync with
- * `GRID_MIME` in bqSqlNotebookController.ts and the `notebookRenderer` contribution
+ * `GRID_MIME` in fsqlNotebookController.ts and the `notebookRenderer` contribution
  * in package.json.
  */
-export const GRID_MIME = 'application/vnd.bigquery.grid+json';
+export const GRID_MIME = 'application/vnd.fabric-sql.grid+json';
 
-/** Payload the controller emits per result set (see bqSqlNotebookController.cellPayload). */
+/** Payload the controller emits per result set (see fsqlNotebookController.cellPayload). */
 interface CellPayload {
     rows: Array<{ f: Array<{ v: any }> }>;   // positional rows wrapped as { f: [{ v }] } for the grid
     fields: BqField[];
@@ -104,7 +104,7 @@ function NotebookGrid({ payload, requestPage, requestExport }: {
         : null;
     const truncated = realTotal > loaded && !canFetchMore;
     const capped = payload.truncated && payload.serverRows !== undefined;
-    // Per-type cell colors from the vscode-bigquery.gridColors setting, scoped to this grid. Applied
+    // Per-type cell colors from the fabricSql.gridColors setting, scoped to this grid. Applied
     // via setProperty (not a style string) so CSS custom properties are set reliably.
     const applyColors = (node: HTMLElement | null) => {
         if (!node || !payload.colors) { return; }

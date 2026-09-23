@@ -1,12 +1,12 @@
 import { CancellationToken, Event, InlayHint, InlayHintsProvider, Position, ProviderResult, Range, TextDocument } from "vscode";
-import { isBigQueryLanguage } from "../services/languageUtils";
+import { isFabricSqlLanguage } from "../services/languageUtils";
 
 
-export class BqsqlInlayHintsProvider implements InlayHintsProvider<InlayHint>{
+export class FsqlInlayHintsProvider implements InlayHintsProvider<InlayHint>{
 
     onDidChangeInlayHints?: Event<void> | undefined;
     provideInlayHints(document: TextDocument, range: Range, token: CancellationToken): ProviderResult<InlayHint[]> {
-        if (!isBigQueryLanguage(document.languageId)) { return []; }
+        if (!isFabricSqlLanguage(document.languageId)) { return []; }
         return [];
         //     {
         //     label: "label123",

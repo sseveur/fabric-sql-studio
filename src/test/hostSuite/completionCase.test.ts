@@ -3,14 +3,14 @@ import * as vscode from 'vscode';
 
 /**
  * Verifies FR #13: keyword/function completions respect the new
- * vscode-bigquery.completionKeywordCase / completionFunctionCase settings.
- * Runs in the real Extension Host (no network / no BigQuery creds needed) and
+ * fabricSql.completionKeywordCase / completionFunctionCase settings.
+ * Runs in the real Extension Host (no network / no Fabric SQL creds needed) and
  * inspects the CompletionItem the provider actually produces.
  */
 suite('Completion case settings', () => {
 
     async function itemsFor(content: string, offset: number): Promise<vscode.CompletionItem[]> {
-        const doc = await vscode.workspace.openTextDocument({ language: 'bqsql', content });
+        const doc = await vscode.workspace.openTextDocument({ language: 'fsql', content });
         await vscode.window.showTextDocument(doc);
         const pos = doc.positionAt(offset);
         const list = await vscode.commands.executeCommand<vscode.CompletionList>(
@@ -31,11 +31,11 @@ suite('Completion case settings', () => {
     }
 
     async function set(key: string, val: string) {
-        await vscode.workspace.getConfiguration('vscode-bigquery').update(key, val, vscode.ConfigurationTarget.Global);
+        await vscode.workspace.getConfiguration('fabricSql').update(key, val, vscode.ConfigurationTarget.Global);
     }
 
     suiteSetup(async () => {
-        const ext = vscode.extensions.getExtension('s-seveur.bigquery-studio');
+        const ext = vscode.extensions.getExtension('s-seveur.fabric-sql-studio');
         if (!ext) { assert.fail('extension not found'); }
         await ext.activate();
     });

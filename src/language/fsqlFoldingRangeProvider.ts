@@ -1,14 +1,14 @@
 import { parse } from './tsqlParser';
 import * as vscode from 'vscode';
 import { FoldingRangeProvider, FoldingRange, TextDocument, CancellationToken, ProviderResult } from 'vscode';
-import { BqsqlDocument, BqsqlDocumentItem } from './bqsqlDocument';
-import { isBigQueryLanguage } from '../services/languageUtils';
+import { FsqlDocument, FsqlDocumentItem } from './fsqlDocument';
+import { isFabricSqlLanguage } from '../services/languageUtils';
 
-export class BqsqlFoldingRangeProvider implements FoldingRangeProvider {
+export class FsqlFoldingRangeProvider implements FoldingRangeProvider {
 
     provideFoldingRanges(document: TextDocument, token: CancellationToken): ProviderResult<FoldingRange[]> {
 
-        if (!isBigQueryLanguage(document.languageId)) {
+        if (!isFabricSqlLanguage(document.languageId)) {
             return null;
         }
 
@@ -16,7 +16,7 @@ export class BqsqlFoldingRangeProvider implements FoldingRangeProvider {
         const ranges: FoldingRange[] = [];
 
         try {
-            const parsed = parse(text) as BqsqlDocument;
+            const parsed = parse(text) as FsqlDocument;
 
             // Find top-level statements
             const statements = this.findTopLevelStatements(parsed.items);
@@ -45,8 +45,8 @@ export class BqsqlFoldingRangeProvider implements FoldingRangeProvider {
     /**
      * Find top-level statements (Query, QueryWith, CreateTable, etc.)
      */
-    private findTopLevelStatements(items: BqsqlDocumentItem[]): BqsqlDocumentItem[] {
-        const statements: BqsqlDocumentItem[] = [];
+    private findTopLevelStatements(items: FsqlDocumentItem[]): FsqlDocumentItem[] {
+        const statements: FsqlDocumentItem[] = [];
 
         for (const item of items) {
             // Top-level statement types from parser
@@ -87,11 +87,11 @@ export class BqsqlFoldingRangeProvider implements FoldingRangeProvider {
      * Start: First line of statement
      * End: Line containing semicolon (or last line of statement range)
      */
-    private createFoldingRangeForStatement(stmt: BqsqlDocumentItem, _text: string): FoldingRange | null {
+    private createFoldingRangeForStatement(stmt: FsqlDocumentItem, _text: string): FoldingRange | null {
         // Statement nodes have no range of their own — fold from the first to the last leaf.
         let startLine = Number.POSITIVE_INFINITY;
         let endLine = -1;
-        const walk = (item: BqsqlDocumentItem) => {
+        const walk = (item: FsqlDocumentItem) => {
             if (item.range && item.range.length >= 3) {
                 startLine = Math.min(startLine, item.range[0]);
                 endLine = Math.max(endLine, item.range[0]);

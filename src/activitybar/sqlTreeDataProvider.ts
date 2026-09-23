@@ -116,7 +116,7 @@ export class SqlTreeDataProvider implements vscode.TreeDataProvider<ObjectTreeIt
 
     setSearchTerm(term: string | null): void {
         this.searchTerm = term;
-        vscode.commands.executeCommand('setContext', 'bigquery.isSearching', term !== null);
+        vscode.commands.executeCommand('setContext', 'fabric-sql.isSearching', term !== null);
         this._onDidChangeTreeData.fire();
     }
 

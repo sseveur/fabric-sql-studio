@@ -19,7 +19,7 @@ suite('cellFormatters', () => {
         });
 
         test('TIMESTAMP float-seconds → ISO string', () => {
-            // BigQuery default wire format for TIMESTAMP is float seconds since epoch.
+            // Fabric SQL default wire format for TIMESTAMP is float seconds since epoch.
             assert.strictEqual(formatScalar('0', 'TIMESTAMP'), '1970-01-01T00:00:00.000Z');
             assert.strictEqual(formatScalar('1609459200', 'TIMESTAMP'), '2021-01-01T00:00:00.000Z');
         });

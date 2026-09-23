@@ -1,36 +1,36 @@
 import * as vscode from 'vscode';
 import { Uri, StatusBarItem, ExtensionContext } from 'vscode';
-import { BigqueryAuthenticationWebviewViewProvider } from './activitybar/authenticationWebviewViewProvider';
+import { AuthenticationWebviewViewProvider } from './activitybar/authenticationWebviewViewProvider';
 import { SqlTreeDataProvider } from './activitybar/sqlTreeDataProvider';
 import { SETTING_ACTIVE_CONNECTION, SETTING_CONNECTIONS, SETTING_PINNED_OBJECTS } from './services/connections';
 import * as commands from './extensionCommands';
 import { WebviewViewProvider } from './tableResultsPanel/webviewViewProvider';
-import { BqsqlCompletionItemProvider } from './language/bqsqlCompletionItemProvider';
-import { BqsqlDocumentSemanticTokensProvider } from './language/bqsqlDocumentSemanticTokensProvider';
-import { BqsqlInlayHintsProvider } from './language/bqsqlInlayHintsProvider';
-import { BqsqlHoverProvider } from './language/bqsqlHoverProvider';
-import { BqsqlFoldingRangeProvider } from './language/bqsqlFoldingRangeProvider';
-import { BqsqlCtePreviewCodeLensProvider } from './language/bqsqlCtePreviewCodeLensProvider';
-import { BqsqlFormattingProvider } from './language/bqsqlFormattingProvider';
-import { BigqueryTableSchemaService } from './services/bigqueryTableSchemaService';
+import { FsqlCompletionItemProvider } from './language/fsqlCompletionItemProvider';
+import { FsqlDocumentSemanticTokensProvider } from './language/fsqlDocumentSemanticTokensProvider';
+import { FsqlInlayHintsProvider } from './language/fsqlInlayHintsProvider';
+import { FsqlHoverProvider } from './language/fsqlHoverProvider';
+import { FsqlFoldingRangeProvider } from './language/fsqlFoldingRangeProvider';
+import { FsqlCtePreviewCodeLensProvider } from './language/fsqlCtePreviewCodeLensProvider';
+import { FsqlFormattingProvider } from './language/fsqlFormattingProvider';
+import { TableSchemaService } from './services/tableSchemaService';
 import { QueryResultsSerializer } from './tableResultsPanel/queryResultsSerializer';
 import { QueryResultsMappingService } from './services/queryResultsMappingService';
 import { TableResultsSerializer } from './tableResultsPanel/tableResultsSerializer';
 import { ResultsRender } from './services/resultsRender';
 import { QueryResultsVisualizationType } from './services/queryResultsVisualizationType';
-import { isBigQueryLanguage } from './services/languageUtils';
+import { isFabricSqlLanguage } from './services/languageUtils';
 import { QueryHistoryTreeDataProvider } from './activitybar/queryHistoryTreeDataProvider';
 import { JobHistoryTreeDataProvider } from './activitybar/jobHistoryTreeDataProvider';
-import { BqSqlNotebookSerializer, NOTEBOOK_TYPE } from './notebook/bqSqlNotebookSerializer';
-import { BqSqlNotebookController } from './notebook/bqSqlNotebookController';
+import { FsqlNotebookSerializer, NOTEBOOK_TYPE } from './notebook/fsqlNotebookSerializer';
+import { FsqlNotebookController } from './notebook/fsqlNotebookController';
 
-export const bigqueryWebviewViewProvider = new WebviewViewProvider();
-export const authenticationWebviewProvider = new BigqueryAuthenticationWebviewViewProvider();
+export const fabricSqlWebviewViewProvider = new WebviewViewProvider();
+export const authenticationWebviewProvider = new AuthenticationWebviewViewProvider();
 export const sqlTreeDataProvider = new SqlTreeDataProvider();
-export const bigqueryTableSchemaService = new BigqueryTableSchemaService();
+export const tableSchemaService = new TableSchemaService();
 
-export const QUERY_RESULTS_VIEW_TYPE = "bigquery-query-results";
-export const TABLE_RESULTS_VIEW_TYPE = "bigquery-table-results";
+export const QUERY_RESULTS_VIEW_TYPE = "fabric-sql-query-results";
+export const TABLE_RESULTS_VIEW_TYPE = "fabric-sql-table-results";
 
 let statusBarInfo: StatusBarItem | null;
 export function getStatusBarInfo(): StatusBarItem | null {
@@ -330,17 +330,17 @@ export function activate(context: ExtensionContext) {
 	context.subscriptions.push(
 		vscode.workspace.registerNotebookSerializer(
 			NOTEBOOK_TYPE,
-			new BqSqlNotebookSerializer(),
+			new FsqlNotebookSerializer(),
 			{ transientOutputs: true }
 		)
 	);
-	const notebookController = new BqSqlNotebookController(queryHistoryService);
+	const notebookController = new FsqlNotebookController(queryHistoryService);
 	context.subscriptions.push(notebookController);
 
 
 	context.subscriptions.push(
 		vscode.window.registerTreeDataProvider(
-			'bigquery-query-history',
+			'fabric-sql-query-history',
 			queryHistoryTreeDataProvider
 		)
 	);
@@ -390,7 +390,7 @@ export function activate(context: ExtensionContext) {
 	// Server-side Job History (jobs.list — any client, not just this extension)
 	const jobHistoryTreeDataProvider = new JobHistoryTreeDataProvider();
 	context.subscriptions.push(
-		vscode.window.registerTreeDataProvider('bigquery-job-history', jobHistoryTreeDataProvider),
+		vscode.window.registerTreeDataProvider('fabric-sql-job-history', jobHistoryTreeDataProvider),
 		vscode.commands.registerCommand(commands.COMMAND_JOB_HISTORY_SHOW, commands.commandJobHistoryShow),
 		vscode.commands.registerCommand(commands.COMMAND_JOB_HISTORY_REFRESH, () => jobHistoryTreeDataProvider.refresh()),
 		vscode.commands.registerCommand(commands.COMMAND_JOB_HISTORY_TOGGLE_ALL_USERS, () => jobHistoryTreeDataProvider.toggleAllUsers()),
@@ -400,24 +400,24 @@ export function activate(context: ExtensionContext) {
 		vscode.commands.registerCommand(commands.COMMAND_EXPLAIN_QUERY_XML, commands.commandExplainQueryXml)
 	);
 
-	// bigquery-authentication
+	// fabric-sql-authentication
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
-			"bigquery-authentication",
+			"fabric-sql-authentication",
 			authenticationWebviewProvider,
 			{ webviewOptions: { retainContextWhenHidden: true } }
 		)
 	);
 
-	//bigquery-tree-data-provider
+	//fabric-sql-tree-data-provider
 	context.subscriptions.push(
 		vscode.window.registerTreeDataProvider(
-			'bigquery-tree-data-provider',
+			'fabric-sql-tree-data-provider',
 			sqlTreeDataProvider
 		)
 	);
 
-	//bigquery-query-results
+	//fabric-sql-query-results
 	context.subscriptions.push(
 		vscode.window.registerWebviewPanelSerializer(
 			QUERY_RESULTS_VIEW_TYPE,
@@ -425,7 +425,7 @@ export function activate(context: ExtensionContext) {
 		)
 	);
 
-	//bigquery-table-results
+	//fabric-sql-table-results
 	context.subscriptions.push(
 		vscode.window.registerWebviewPanelSerializer(
 			TABLE_RESULTS_VIEW_TYPE,
@@ -435,14 +435,14 @@ export function activate(context: ExtensionContext) {
 
 	//language
 
-	// Register language providers for both bqsql and sql languages
-	const completionProvider = new BqsqlCompletionItemProvider();
-	const semanticTokensProvider = new BqsqlDocumentSemanticTokensProvider();
-	const inlayHintsProvider = new BqsqlInlayHintsProvider();
+	// Register language providers for both fsql and sql languages
+	const completionProvider = new FsqlCompletionItemProvider();
+	const semanticTokensProvider = new FsqlDocumentSemanticTokensProvider();
+	const inlayHintsProvider = new FsqlInlayHintsProvider();
 
 	context.subscriptions.push(
 		vscode.languages.registerCompletionItemProvider(
-			{ language: 'bqsql' },
+			{ language: 'fsql' },
 			completionProvider,
 			'.' // Trigger completion when user types '.' for CTE column suggestions
 		)
@@ -457,22 +457,22 @@ export function activate(context: ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.languages.registerDocumentSemanticTokensProvider(
-			{ language: 'bqsql' },
+			{ language: 'fsql' },
 			semanticTokensProvider,
-			BqsqlDocumentSemanticTokensProvider.getSemanticTokensLegend()
+			FsqlDocumentSemanticTokensProvider.getSemanticTokensLegend()
 		)
 	);
 	context.subscriptions.push(
 		vscode.languages.registerDocumentSemanticTokensProvider(
 			{ language: 'sql' },
 			semanticTokensProvider,
-			BqsqlDocumentSemanticTokensProvider.getSemanticTokensLegend()
+			FsqlDocumentSemanticTokensProvider.getSemanticTokensLegend()
 		)
 	);
 
 	context.subscriptions.push(
 		vscode.languages.registerInlayHintsProvider(
-			{ language: 'bqsql' },
+			{ language: 'fsql' },
 			inlayHintsProvider
 		)
 	);
@@ -484,10 +484,10 @@ export function activate(context: ExtensionContext) {
 	);
 
 	// Hover provider for table schema preview
-	const hoverProvider = new BqsqlHoverProvider();
+	const hoverProvider = new FsqlHoverProvider();
 	context.subscriptions.push(
 		vscode.languages.registerHoverProvider(
-			{ language: 'bqsql' },
+			{ language: 'fsql' },
 			hoverProvider
 		)
 	);
@@ -499,10 +499,10 @@ export function activate(context: ExtensionContext) {
 	);
 
 	// Folding range provider for collapsing queries
-	const foldingRangeProvider = new BqsqlFoldingRangeProvider();
+	const foldingRangeProvider = new FsqlFoldingRangeProvider();
 	context.subscriptions.push(
 		vscode.languages.registerFoldingRangeProvider(
-			{ language: 'bqsql' },
+			{ language: 'fsql' },
 			foldingRangeProvider
 		)
 	);
@@ -514,10 +514,10 @@ export function activate(context: ExtensionContext) {
 	);
 
 	// CodeLens provider: "Preview CTE" link above each CTE in a WITH clause
-	const ctePreviewCodeLensProvider = new BqsqlCtePreviewCodeLensProvider();
+	const ctePreviewCodeLensProvider = new FsqlCtePreviewCodeLensProvider();
 	context.subscriptions.push(
 		vscode.languages.registerCodeLensProvider(
-			{ language: 'bqsql' },
+			{ language: 'fsql' },
 			ctePreviewCodeLensProvider
 		)
 	);
@@ -530,10 +530,10 @@ export function activate(context: ExtensionContext) {
 
 	// Document formatting provider: wires the SQL formatter into VS Code's
 	// standard formatting API (Format Document, context menu, formatOnSave)
-	const formattingProvider = new BqsqlFormattingProvider();
+	const formattingProvider = new FsqlFormattingProvider();
 	context.subscriptions.push(
 		vscode.languages.registerDocumentFormattingEditProvider(
-			{ language: 'bqsql' },
+			{ language: 'fsql' },
 			formattingProvider
 		)
 	);
@@ -561,14 +561,14 @@ export function activate(context: ExtensionContext) {
 
 	vscode.window.onDidChangeActiveTextEditor(e => {
 
-		if (e?.document && isBigQueryLanguage(e.document.languageId)) {
+		if (e?.document && isFabricSqlLanguage(e.document.languageId)) {
 
 			//check if results tab exist and it's known
 			//  is possible that is not know in case that vscode was restarted and that window was not opened
 			//  in this scenario, the tab exists but is not possible to determine the correspondent panel
 			//  panels are lazy loaded
 
-			const config = vscode.workspace.getConfiguration('vscode-bigquery');
+			const config = vscode.workspace.getConfiguration('fabricSql');
 			const autoReveal = config.get('autoRevealResults', true);
 
 			if (autoReveal) {

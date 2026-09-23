@@ -3,14 +3,14 @@ import { extractCtePreviews } from '../services/ctePreview';
 
 // Must match COMMAND_PREVIEW_CTE in extensionCommands.ts.
 // Hardcoded here to avoid an import cycle (extensionCommands ↔ extension).
-const PREVIEW_CTE_COMMAND = 'vscode-bigquery.preview-cte';
+const PREVIEW_CTE_COMMAND = 'fabricSql.preview-cte';
 
 /**
  * Renders a clickable "Preview CTE" CodeLens above each CTE in a top-level WITH
  * clause, mirroring the dbt Power User experience. Clicking runs the CTE in
  * isolation (all upstream CTEs included) and shows the rows in the results grid.
  */
-export class BqsqlCtePreviewCodeLensProvider implements vscode.CodeLensProvider {
+export class FsqlCtePreviewCodeLensProvider implements vscode.CodeLensProvider {
 
     private readonly _onDidChangeCodeLenses = new vscode.EventEmitter<void>();
     readonly onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
@@ -19,8 +19,8 @@ export class BqsqlCtePreviewCodeLensProvider implements vscode.CodeLensProvider 
         // Re-render lenses when the toggle or row-limit setting changes.
         vscode.workspace.onDidChangeConfiguration(e => {
             if (
-                e.affectsConfiguration('vscode-bigquery.enableCtePreviewCodeLens') ||
-                e.affectsConfiguration('vscode-bigquery.ctePreviewRowLimit')
+                e.affectsConfiguration('fabricSql.enableCtePreviewCodeLens') ||
+                e.affectsConfiguration('fabricSql.ctePreviewRowLimit')
             ) {
                 this._onDidChangeCodeLenses.fire();
             }
@@ -31,7 +31,7 @@ export class BqsqlCtePreviewCodeLensProvider implements vscode.CodeLensProvider 
         document: vscode.TextDocument,
         _token: vscode.CancellationToken
     ): vscode.CodeLens[] {
-        const config = vscode.workspace.getConfiguration('vscode-bigquery');
+        const config = vscode.workspace.getConfiguration('fabricSql');
         if (!config.get<boolean>('enableCtePreviewCodeLens', true)) {
             return [];
         }

@@ -13,13 +13,13 @@ import * as vscode from 'vscode';
 suite('Document formatting provider', () => {
 
     suiteSetup(async () => {
-        const ext = vscode.extensions.getExtension('s-seveur.bigquery-studio');
+        const ext = vscode.extensions.getExtension('s-seveur.fabric-sql-studio');
         if (!ext) { assert.fail('extension not found'); }
         await ext.activate();
     });
 
     async function formatToText(content: string): Promise<{ edits: number; text: string; doc: vscode.TextDocument }> {
-        const doc = await vscode.workspace.openTextDocument({ language: 'bqsql', content });
+        const doc = await vscode.workspace.openTextDocument({ language: 'fsql', content });
         await vscode.window.showTextDocument(doc);
         const edits = (await vscode.commands.executeCommand<vscode.TextEdit[]>(
             'vscode.executeFormatDocumentProvider', doc.uri, { tabSize: 4, insertSpaces: true }
@@ -30,7 +30,7 @@ suite('Document formatting provider', () => {
         return { edits: edits.length, text: doc.getText(), doc };
     }
 
-    test('bqsql: provider registered and formats unformatted SQL', async () => {
+    test('fsql: provider registered and formats unformatted SQL', async () => {
         const { edits, text } = await formatToText('select a,b from t');
         assert.ok(edits > 0, 'expected at least one formatting edit');
         assert.match(text, /SELECT/, 'formatted text uppercases SELECT');
@@ -38,9 +38,9 @@ suite('Document formatting provider', () => {
         assert.match(text, /\n/, 'formatted text spans multiple lines');
     });
 
-    test('bqsql: already-formatted document yields no edits', async () => {
+    test('fsql: already-formatted document yields no edits', async () => {
         const { text: formatted } = await formatToText('select a,b from t');
-        const doc = await vscode.workspace.openTextDocument({ language: 'bqsql', content: formatted });
+        const doc = await vscode.workspace.openTextDocument({ language: 'fsql', content: formatted });
         await vscode.window.showTextDocument(doc);
         const edits = (await vscode.commands.executeCommand<vscode.TextEdit[]>(
             'vscode.executeFormatDocumentProvider', doc.uri, { tabSize: 4, insertSpaces: true }

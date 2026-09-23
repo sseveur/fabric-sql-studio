@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as commands from '../extensionCommands';
-import { BigqueryIcons } from '../bigqueryIcons';
+import { Icons } from '../icons';
 import { ObjectRef } from '../services/objectRef';
 
 /** Grouping nodes that are not database objects themselves. */
@@ -19,7 +19,7 @@ export class ObjectTreeItem extends vscode.TreeItem {
         super(label, collapsibleState);
         this.description = description;
 
-        const icons = new BigqueryIcons();
+        const icons = new Icons();
         switch (nodeKind) {
             case 'connection':
                 this.iconPath = new vscode.ThemeIcon(opts.active ? 'plug' : 'debug-disconnect');

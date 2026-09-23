@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ColumnProfile, TopValue } from '../services/columnProfile';
 
-const PANEL_VIEW_TYPE = 'bigquery-column-profile';
+const PANEL_VIEW_TYPE = 'fabric-sql-column-profile';
 
 let currentPanel: vscode.WebviewPanel | undefined;
 
@@ -318,7 +318,7 @@ function renderTopValues(top: TopValue[] | null): string {
 }
 
 /**
- * Parses quantile entries (numbers / numeric strings / BigQueryDate-style {value: '...'})
+ * Parses quantile entries (numbers / numeric strings / FabricSqlDate-style {value: '...'})
  * to numbers. Date strings are parsed via Date.parse. Returns null when the array
  * isn't usable for a chart (mixed/non-numeric).
  */
@@ -376,7 +376,7 @@ function toNumber(v: unknown): number | null {
 function formatScalar(value: unknown): string {
     if (value === null || value === undefined) { return 'NULL'; }
     if (typeof value === 'object') {
-        // BigQueryDate / BigQueryTimestamp / BigQueryDatetime expose `.value` as a string.
+        // FabricSqlDate / FabricSqlTimestamp / FabricSqlDatetime expose `.value` as a string.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const v: any = value;
         if (typeof v.value === 'string') { return v.value; }

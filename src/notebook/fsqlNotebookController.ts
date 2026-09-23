@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { QueryHistoryService } from '../services/queryHistoryService';
-import { NOTEBOOK_TYPE, CELL_LANGUAGE } from './bqSqlNotebookSerializer';
+import { NOTEBOOK_TYPE, CELL_LANGUAGE } from './fsqlNotebookSerializer';
 import { sanitizedGridColorVars } from '../tableResultsPanel/resultsGridRender';
 import { clientFor, getResultPage } from '../services/sqlServerClient';
 import { pickConnectionFor } from '../services/queryRouter';
@@ -8,15 +8,15 @@ import { toWireRow } from '../tableResultsPanel/grid/pagination';
 import { exportSqlResult, ExportKind } from '../tableResultsPanel/sqlExport';
 import { SqlResultSet } from '../tableResultsPanel/resultContract';
 
-const CONTROLLER_ID = 'bigquery-sql-controller';
+const CONTROLLER_ID = 'fabric-sql-controller';
 const CONTROLLER_LABEL = 'SQL (TDS)';
 const INITIAL_PAGE_ROWS = 1000;
 /** Must match the notebookRenderer id in package.json and the renderer bundle. */
-const RENDERER_ID = 'bigquery-grid-renderer';
+const RENDERER_ID = 'fabric-sql-grid-renderer';
 
 /** MIME type consumed by the notebook-renderer bundle (resources/notebook-renderer.js). Keep in
  *  sync with GRID_MIME in src/notebook/renderer/index.tsx and the package.json contribution. */
-const GRID_MIME = 'application/vnd.bigquery.grid+json';
+const GRID_MIME = 'application/vnd.fabric-sql.grid+json';
 
 const EXPORT_KIND: Record<string, ExportKind> = { download_csv: 'csv', download_jsonl: 'jsonl', copy_to_clipboard: 'clipboard' };
 
@@ -28,7 +28,7 @@ const EXPORT_KIND: Record<string, ExportKind> = { download_csv: 'csv', download_
  * ponytail: results are not persisted across VS Code restarts — a restored cell shows no output
  * until re-run. That was true of the rows before too; only the job id survived.
  */
-export class BqSqlNotebookController implements vscode.Disposable {
+export class FsqlNotebookController implements vscode.Disposable {
     private readonly controller: vscode.NotebookController;
     private executionOrder = 0;
     private readonly messaging: vscode.NotebookRendererMessaging;
@@ -81,7 +81,7 @@ export class BqSqlNotebookController implements vscode.Disposable {
             if (!route) { throw new Error('No connection configured. Add one in the Explorer view first.'); }
             connId = route.conn.id;
 
-            const maxRows = vscode.workspace.getConfiguration('vscode-bigquery').get<number>('maxRows', 100000);
+            const maxRows = vscode.workspace.getConfiguration('fabricSql').get<number>('maxRows', 100000);
             let cancel: (() => void) | null = null;
             execution.token.onCancellationRequested(() => cancel?.());
             const result = await clientFor(route.conn).runQuery(queryText, maxRows, c => { cancel = c; });

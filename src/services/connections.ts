@@ -2,12 +2,12 @@ import * as vscode from 'vscode';
 import { ConnectionRef, ObjectRef, ObjectRefKey, refKeyCI, refToKey } from './objectRef';
 
 /**
- * Connection profiles live in settings (`vscode-bigquery.connections`), mssql-extension style,
+ * Connection profiles live in settings (`fabricSql.connections`), mssql-extension style,
  * so they ride Settings Sync. `activeConnection` is the profile bare queries run against.
  */
-export const SETTING_CONNECTIONS = 'vscode-bigquery.connections';
-export const SETTING_ACTIVE_CONNECTION = 'vscode-bigquery.activeConnection';
-export const SETTING_PINNED_OBJECTS = 'vscode-bigquery.pinned-objects';
+export const SETTING_CONNECTIONS = 'fabricSql.connections';
+export const SETTING_ACTIVE_CONNECTION = 'fabricSql.activeConnection';
+export const SETTING_PINNED_OBJECTS = 'fabricSql.pinned-objects';
 
 interface RawConnection { id?: string; server?: string; database?: string; port?: number; kind?: string }
 

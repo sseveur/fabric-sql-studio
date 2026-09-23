@@ -405,7 +405,7 @@ mark.bq-mark { background: color-mix(in srgb, var(--bq-accent) 35%, transparent)
 }
 
 /* Type syntax colors — subtle, theme-aware.
-   Each var can be overridden by the extension via vscode-bigquery.gridColors.
+   Each var can be overridden by the extension via fabricSql.gridColors.
    Defaults cascade: user override → VS Code chart var → hardcoded fallback. */
 :root {
     --bq-color-number: var(--vscode-charts-blue, #4fc1ff);

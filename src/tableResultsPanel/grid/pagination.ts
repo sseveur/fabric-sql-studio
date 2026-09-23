@@ -29,7 +29,7 @@ export function handleSqlPageMessage(msg: SqlPageResponse): void {
 }
 
 /** Positional row -> the { f: [{ v }] } shape the grid already renders. ponytail: adapter until
- *  BqTable goes positional once the BigQuery paths are deleted. */
+ *  BqTable goes positional once the Fabric SQL paths are deleted. */
 export function toWireRow(row: unknown[]): { f: Array<{ v: unknown }> } {
     return { f: row.map(v => ({ v })) };
 }
