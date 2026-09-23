@@ -38,8 +38,11 @@ export function extractCteColumns(sql: string, cteName: string): CteColumn[] {
     const head = new RegExp(String.raw`${name}\s+AS\s*\(\s*SELECT\s+(?:DISTINCT\s+)?(?:TOP\s*\(?\s*\d+\s*\)?\s+(?:PERCENT\s+)?)?`, 'i').exec(sql);
     if (!head) { return []; }
     const selectList = extractUntilFrom(sql.substring(head.index + head[0].length));
-    if (!selectList) { return []; }
+    return selectList ? selectListColumns(selectList) : [];
+}
 
+/** Output column names of a SELECT list (the text between SELECT and FROM). */
+export function selectListColumns(selectList: string): CteColumn[] {
     const columns: CteColumn[] = [];
     const push = (raw: string) => {
         const n = unquotePart(raw);
@@ -107,4 +110,41 @@ export function getCteNames(sql: string): string[] {
 
 function escapeRegex(s: string): string {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Columns of the statement's main SELECT: the last SELECT outside any parentheses, i.e. what a
+ * query returns or what an INSERT ... SELECT writes. An `INSERT INTO t (a, b)` column list wins.
+ */
+export function finalSelectColumns(sql: string): CteColumn[] {
+    const insert = /\bINSERT\s+(?:INTO\s+)?(?:\[[^\]]+\]|"[^"]+"|[\w@#$.])+\s*\(([^()]*)\)/i.exec(sql);
+    if (insert) {
+        return insert[1].split(',').map(c => unquotePart(c.trim())).filter(Boolean).map(c => ({ name: c }));
+    }
+    let depth = 0, last = -1;
+    for (let i = 0; i < sql.length; i++) {
+        const ch = sql[i];
+        if (ch === "'" || ch === '[' || ch === '"') {
+            const close = ch === '[' ? ']' : ch;
+            i = sql.indexOf(close, i + 1);
+            if (i < 0) { break; }
+        } else if (ch === '-' && sql[i + 1] === '-') {
+            i = sql.indexOf('\n', i);
+            if (i < 0) { break; }
+        } else if (ch === '/' && sql[i + 1] === '*') {
+            i = sql.indexOf('*/', i + 2);
+            if (i < 0) { break; }
+            i++;
+        } else if (ch === '(') {
+            depth++;
+        } else if (ch === ')') {
+            depth--;
+        } else if (depth === 0 && /^SELECT\b/i.test(sql.substring(i, i + 7)) && !/[\w@#$]/.test(sql[i - 1] ?? ' ')) {
+            last = i;
+        }
+    }
+    if (last < 0) { return []; }
+    const rest = sql.substring(last).replace(/^SELECT\s+(?:DISTINCT\s+)?(?:TOP\s*\(?\s*\d+\s*\)?\s+(?:PERCENT\s+)?)?/i, '');
+    const list = extractUntilFrom(rest) ?? rest.replace(/;\s*$/, '');
+    return selectListColumns(list);
 }

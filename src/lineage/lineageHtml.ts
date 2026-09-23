@@ -250,7 +250,25 @@ export function renderLineageHtml(sections: LineageSection[], exportTheme: strin
         .section-controls {
             display: flex;
             justify-content: flex-end;
+            align-items: center;
+            gap: 8px;
             margin-bottom: 8px;
+        }
+
+        .zoom-btn.columns-toggle {
+            width: auto;
+            padding: 0 10px;
+        }
+
+        .zoom-btn.columns-toggle.active {
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border-color: var(--vscode-button-background);
+        }
+
+        .zoom-btn.columns-toggle:disabled {
+            opacity: 0.6;
+            cursor: progress;
         }
 
         .zoom-controls {
@@ -474,8 +492,9 @@ export function renderLineageHtml(sections: LineageSection[], exportTheme: strin
                 });
             });
 
-            // Hover a node: keep its whole upstream and downstream lineage, fade the rest
-            document.querySelectorAll('.lineage-graph').forEach(function(svg) {
+            // Hover (lineage highlight) and click (go to SQL) on one graph; re-run after the Columns
+            // toggle swaps the SVG, since the old elements and their listeners are gone
+            function bindGraph(svg) {
                 var edges = Array.prototype.slice.call(svg.querySelectorAll('.edge'));
                 var nodes = Array.prototype.slice.call(svg.querySelectorAll('.node'));
                 function walk(start, from, to) {
@@ -508,25 +527,65 @@ export function renderLineageHtml(sections: LineageSection[], exportTheme: strin
                         svg.classList.remove('focus');
                         svg.querySelectorAll('.related').forEach(function(el) { el.classList.remove('related'); });
                     });
-                });
-            });
-
-            // Click handler for nodes - navigate to source position
-            document.querySelectorAll('.node').forEach(function(node) {
-                node.style.cursor = 'pointer';
-                node.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    const line = parseInt(this.getAttribute('data-line')) || null;
-                    const column = parseInt(this.getAttribute('data-column')) || null;
-                    const fullName = this.getAttribute('data-fullname') || '';
-
-                    vscode.postMessage({
-                        type: 'navigate',
-                        line: line,
-                        column: column,
-                        fullName: fullName
+                    node.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        vscode.postMessage({
+                            type: 'navigate',
+                            line: parseInt(node.getAttribute('data-line')) || null,
+                            column: parseInt(node.getAttribute('data-column')) || null,
+                            fullName: node.getAttribute('data-fullname') || ''
+                        });
                     });
                 });
+            }
+            document.querySelectorAll('.lineage-graph').forEach(bindGraph);
+
+            // Columns toggle: the column view is built by the extension on first use (it reads the
+            // catalog), then both SVGs are kept and swapped
+            var columnViews = {};
+            document.querySelectorAll('.query-section').forEach(function(section) {
+                var index = section.getAttribute('data-query-index');
+                var button = section.querySelector('.columns-toggle');
+                var wrapper = section.querySelector('.graph-wrapper');
+                if (!button || !wrapper) return;
+                columnViews[index] = { compact: wrapper.innerHTML, columns: null, on: false, button: button, wrapper: wrapper };
+                button.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    var view = columnViews[index];
+                    if (view.on) {
+                        showView(index, false);
+                    } else if (view.columns) {
+                        showView(index, true);
+                    } else {
+                        button.disabled = true;
+                        button.textContent = 'Loading\u2026';
+                        vscode.postMessage({ type: 'loadColumns', queryIndex: Number(index) });
+                    }
+                });
+            });
+            function showView(index, on) {
+                var view = columnViews[index];
+                view.on = on;
+                view.wrapper.innerHTML = on ? view.columns : view.compact;
+                view.button.classList.toggle('active', on);
+                view.button.setAttribute('aria-pressed', String(on));
+                view.button.textContent = 'Columns';
+                view.button.disabled = false;
+                var svg = view.wrapper.querySelector('.lineage-graph');
+                if (svg) bindGraph(svg);
+            }
+            window.addEventListener('message', function(event) {
+                var msg = event.data || {};
+                var view = columnViews[String(msg.queryIndex)];
+                if (!view) return;
+                if (msg.type === 'columnsSvg') {
+                    view.columns = msg.svg;
+                    showView(String(msg.queryIndex), true);
+                } else if (msg.type === 'columnsError') {
+                    view.button.disabled = false;
+                    view.button.textContent = 'Columns';
+                    view.button.title = 'Could not load columns: ' + msg.error;
+                }
             });
 
             // Click handler for query headers - navigate to query start
@@ -722,6 +781,7 @@ export function renderQuerySection(section: LineageSection, displayIndex: number
             </div>
             <div class="query-body">
                 <div class="section-controls">
+                    <button class="zoom-btn columns-toggle" aria-pressed="false" title="Show the columns of each table, CTE and result">Columns</button>
                     <div class="zoom-controls">
                         <button class="zoom-btn zoom-out" title="Zoom out">-</button>
                         <span class="zoom-level">100%</span>

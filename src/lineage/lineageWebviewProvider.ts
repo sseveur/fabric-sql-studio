@@ -1,7 +1,11 @@
 import * as vscode from 'vscode';
 import { MultiLineageResult } from '../services/lineageGraph';
 import { calculateLayout } from './dagLayout';
-import { renderGraphToSvg } from './svgRenderer';
+import { columnsCardHeight, renderGraphToSvg } from './svgRenderer';
+import { resolveLineageColumns } from './lineageColumns';
+import { defaultColumnLookup } from '../services/columnResolver';
+import { getActiveConnection } from '../services/connections';
+import { getLayoutConfig } from './dagLayout';
 import { exportFilename, LineageSection, renderLineageHtml } from './lineageHtml';
 import { LineageExportService } from './lineageExportService';
 import { getContentSecurityPolicy, getNonce, reportCspViolation } from '../utils/webviewSecurity';
@@ -58,6 +62,8 @@ export function showMultiLineagePanel(result: MultiLineageResult, context: vscod
             handleExportPngData(message);
         } else if (message.type === 'exportAllPngData') {
             handleExportAllPngData(message);
+        } else if (message.type === 'loadColumns') {
+            void postColumnsSvg(message.queryIndex);
         } else if (message.type === 'cspViolation') {
             reportCspViolation('lineage', message.directive, message.blocked);
         } else if (message.type === 'exportError') {
@@ -98,6 +104,7 @@ function updateMultiPanelContent(panel: vscode.WebviewPanel, result: MultiLineag
             return { queryInfo, svg: renderGraphToSvg(queryInfo.graph, width, height) };
         });
     currentSvgData = sections;
+    columnsSvgCache.clear();
 
     const exportTheme = vscode.workspace.getConfiguration('fabricSql').get<string>('lineageExportTheme', 'dark');
     const nonce = getNonce();
@@ -246,3 +253,34 @@ async function navigateToPosition(line?: number, column?: number, fullName?: str
 function escapeRegex(str: string): string {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+/** "Columns" view SVG per section, built on first request and dropped when the panel re-renders. */
+const columnsSvgCache = new Map<number, Promise<string>>();
+
+/** Answers the webview's Columns toggle: `columnsSvg` with the SVG, or `columnsError`. */
+async function postColumnsSvg(queryIndex: number): Promise<void> {
+    const section = currentSvgData?.[queryIndex];
+    const panel = currentPanel;
+    if (!section || !panel) { return; }
+    if (!columnsSvgCache.has(queryIndex)) {
+        columnsSvgCache.set(queryIndex, buildColumnsSvg(section));
+    }
+    try {
+        const svg = await columnsSvgCache.get(queryIndex)!;
+        await panel.webview.postMessage({ type: 'columnsSvg', queryIndex, svg });
+    } catch (e: any) {
+        columnsSvgCache.delete(queryIndex);
+        await panel.webview.postMessage({ type: 'columnsError', queryIndex, error: e?.message ?? String(e) });
+    }
+}
+
+async function buildColumnsSvg(section: LineageSection): Promise<string> {
+    // Own copy: the layout writes positions and heights, the compact view keeps its own
+    const graph = JSON.parse(JSON.stringify(section.queryInfo.graph)) as LineageSection['queryInfo']['graph'];
+    await resolveLineageColumns(graph, section.queryInfo.sqlText, defaultColumnLookup, getActiveConnection()?.database);
+    const header = getLayoutConfig().nodeHeight;
+    for (const node of graph.nodes) { node.height = columnsCardHeight(node, header); }
+    const { width, height } = calculateLayout(graph);
+    return renderGraphToSvg(graph, width, height);
+}
+

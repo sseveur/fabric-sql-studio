@@ -35,6 +35,30 @@ const BADGE_WIDTH = 36;
 /** Where the name starts, right of the badge. */
 const TEXT_X = BADGE_WIDTH + 10;
 
+/** Column rows in the "Columns" view. */
+const COLUMN_ROW = 20;
+const COLUMN_PAD = 6;
+/** Longer lists end in a "+ N more" row; the tooltip still names the table. */
+export const MAX_COLUMN_ROWS = 12;
+
+/** Height of a card listing `node.columns` (plus a note row when there is one). */
+export function columnsCardHeight(node: LineageNode, headerHeight: number): number {
+    const cols = node.columns?.length ?? 0;
+    const rows = Math.min(cols, MAX_COLUMN_ROWS) + (cols > MAX_COLUMN_ROWS ? 1 : 0) + (node.columnsNote && !cols ? 1 : 0);
+    return rows ? headerHeight + COLUMN_PAD * 2 + rows * COLUMN_ROW : headerHeight;
+}
+
+/** Tiny type glyph for a column row, Unity Catalog style; `?` when the type is unknown. */
+function typeGlyph(type?: string): string {
+    const t = (type ?? '').toLowerCase();
+    if (!t) { return '\u00b7'; }
+    if (/^(bit|bool)/.test(t)) { return '\u2713'; }
+    if (/(int|decimal|numeric|float|real|money|double|long|short|byte)/.test(t)) { return '#'; }
+    if (/(date|time)/.test(t)) { return '\u25f7'; }
+    if (/(char|text|string|xml|uniqueidentifier|sysname)/.test(t)) { return 'Aa'; }
+    return '{}';
+}
+
 /**
  * Render the lineage graph as an SVG string
  */
@@ -151,6 +175,27 @@ function renderEdge(edge: LineageEdge, nodes: LineageNode[], cfg: LayoutConfig, 
     `;
 }
 
+/** Divider under the header, then one row per column: type glyph, name, type right-aligned. */
+function renderColumnRows(node: LineageNode, w: number, headerHeight: number): string {
+    const cols = node.columns ?? [];
+    const shown = cols.slice(0, MAX_COLUMN_ROWS);
+    const rowY = (i: number) => headerHeight + COLUMN_PAD + i * COLUMN_ROW + COLUMN_ROW / 2 + 4;
+    const muted = 'var(--vscode-descriptionForeground, #888)';
+    const rows = shown.map((c, i) => `
+            <text x="12" y="${rowY(i)}" font-size="9.5" font-weight="600" fill="${muted}" class="node-tag">${escapeHtml(typeGlyph(c.type))}</text>
+            <text x="32" y="${rowY(i)}" font-size="11.5" fill="var(--vscode-foreground, #ccc)" class="node-name">${escapeHtml(fitText(c.name, c.type ? w - 32 - 70 : w - 42, 6.3))}</text>
+            ${c.type ? `<text x="${w - 10}" y="${rowY(i)}" font-size="10.5" text-anchor="end" fill="${muted}" class="node-type">${escapeHtml(fitText(c.type, 64, 5.9))}</text>` : ''}`);
+    if (cols.length > MAX_COLUMN_ROWS) {
+        rows.push(`
+            <text x="32" y="${rowY(shown.length)}" font-size="10.5" font-style="italic" fill="${muted}" class="node-type">+ ${cols.length - MAX_COLUMN_ROWS} more</text>`);
+    } else if (!cols.length && node.columnsNote) {
+        rows.push(`
+            <text x="12" y="${rowY(0)}" font-size="10.5" font-style="italic" fill="${muted}" class="node-type">${escapeHtml(fitText(node.columnsNote, w - 22, 5.6))}</text>`);
+    }
+    return `
+            <line x1="0.5" y1="${headerHeight}" x2="${w - 0.5}" y2="${headerHeight}" stroke="var(--vscode-editorWidget-border, #454545)" stroke-width="1"/>${rows.join('')}`;
+}
+
 /**
  * SVG path: horizontal-tangent cubic curves between columns, straight runs across each skipped
  * column. Every curve leaves and arrives horizontally, so edges read left-to-right and the
@@ -193,6 +238,8 @@ function renderNode(node: LineageNode, cfg: LayoutConfig): string {
 
     const color = NODE_COLORS[node.nodeType];
     const w = cfg.nodeWidth, h = cfg.nodeHeight, r = 6;
+    const cardHeight = node.height ?? h;
+    const listed = cardHeight > h;
     const subtitle = nodeSubtitle(node);
     const textWidth = w - TEXT_X - 10;
     // Name and subtitle stacked, or the name alone centred
@@ -207,11 +254,13 @@ function renderNode(node: LineageNode, cfg: LayoutConfig): string {
            ${node.sourceLine ? `data-line="${node.sourceLine}"` : ''}
            ${node.sourceColumn ? `data-column="${node.sourceColumn}"` : ''}>
             <title>${escapeHtml(node.fullName)}${node.statementType ? ` (${escapeHtml(node.statementType)})` : ''}</title>
-            <rect class="node-rect" width="${w}" height="${h}" rx="${r}" ry="${r}"
+            <rect class="node-rect" width="${w}" height="${cardHeight}" rx="${r}" ry="${r}"
                 fill="var(--vscode-editorWidget-background, #252526)"
                 stroke="var(--vscode-editorWidget-border, #454545)" stroke-width="1"
                 filter="url(#card-shadow)"/>
-            <path d="M ${r} 0.5 H ${BADGE_WIDTH} V ${h - 0.5} H ${r} Q 0.5 ${h - 0.5} 0.5 ${h - r} V ${r} Q 0.5 0.5 ${r} 0.5 Z"
+            <path d="${listed
+                ? `M ${r} 0.5 H ${BADGE_WIDTH} V ${h} H 0.5 V ${r} Q 0.5 0.5 ${r} 0.5 Z`
+                : `M ${r} 0.5 H ${BADGE_WIDTH} V ${h - 0.5} H ${r} Q 0.5 ${h - 0.5} 0.5 ${h - r} V ${r} Q 0.5 0.5 ${r} 0.5 Z`}"
                 fill="${color}" fill-opacity="0.14"/>
             <g transform="translate(${(BADGE_WIDTH - 16) / 2}, ${h / 2 - 14})" fill="none" stroke="${color}"
                 stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
@@ -223,6 +272,7 @@ function renderNode(node: LineageNode, cfg: LayoutConfig): string {
                 fill="var(--vscode-foreground, #ccc)">${escapeHtml(fitText(node.name, textWidth, 6.9))}</text>
             ${subtitle ? `<text x="${TEXT_X}" y="${h / 2 + 11}" class="node-type" font-size="10.5"
                 fill="var(--vscode-descriptionForeground, #888)">${escapeHtml(fitText(subtitle, textWidth, 5.9))}</text>` : ''}
+            ${listed ? renderColumnRows(node, w, h) : ''}
         </g>
     `;
 }

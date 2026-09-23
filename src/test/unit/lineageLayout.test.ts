@@ -74,10 +74,11 @@ suite('lineage layout', () => {
             const { width, height } = calculateLayout(g);
             const svg = renderGraphToSvg(g, width, height);
             const ends = new Map<string, string[]>();
-            for (const m of svg.matchAll(/d="([^"]+)"[\s\S]*?data-target="([^"]+)"/g)) {
+            for (const m of svg.matchAll(/<path\s+d="([^"]+)"\s+class="edge"[\s\S]*?data-target="([^"]+)"/g)) {
                 const coords = m[1].trim().split(/[ ,]+/);
                 ends.set(m[2], [...(ends.get(m[2]) ?? []), coords.slice(-2).join(',')]);
             }
+            assert.strictEqual([...ends.values()].flat().length, g.edges.length, 'every edge checked');
             for (const [target, pts] of ends) {
                 assert.strictEqual(new Set(pts).size, pts.length, `arrowheads stack on ${target}: ${pts}`);
             }

@@ -15,6 +15,12 @@ export interface LineageNode {
     y?: number;                    // Calculated by layout engine
     sourceLine?: number;           // Line number in SQL for navigation
     sourceColumn?: number;         // Column number in SQL for navigation
+    /** Set only for the "Columns" view: output columns, with a type when known. */
+    columns?: Array<{ name: string; type?: string }>;
+    /** Why `columns` is missing or partial, e.g. the catalog could not be read. */
+    columnsNote?: string;
+    /** Card height when it lists columns; the layout default otherwise. */
+    height?: number;
 }
 
 export interface LineageEdge {

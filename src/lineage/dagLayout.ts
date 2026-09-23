@@ -32,12 +32,14 @@ const PLACE_SWEEPS = 12;
 
 /**
  * One slot in a layer: a real node, or a lane where an edge that skips this layer passes through.
- * `center` is the vertical centre, filled by placement.
+ * `center` is the item's anchor — the middle of a card's header row, where its edges attach —
+ * filled by placement; a card extends `above` / `below` it (more below when it lists columns).
  */
 interface Item {
     node?: LineageNode;
     rank: number;
-    size: number;
+    above: number;
+    below: number;
     center: number;
     up: Item[];
     down: Item[];
@@ -66,7 +68,8 @@ export function calculateLayout(graph: LineageGraph, config: Partial<LayoutConfi
     const ranks: Item[][] = Array.from({ length: rankCount }, () => []);
     const itemOf = new Map<string, Item>();
     for (const node of graph.nodes) {
-        const item: Item = { node, rank: rankOf.get(node.layer)!, size: cfg.nodeHeight, center: 0, up: [], down: [] };
+        const height = node.height ?? cfg.nodeHeight;
+        const item: Item = { node, rank: rankOf.get(node.layer)!, above: cfg.nodeHeight / 2, below: height - cfg.nodeHeight / 2, center: 0, up: [], down: [] };
         ranks[item.rank].push(item);
         itemOf.set(node.id, item);
     }
@@ -79,7 +82,7 @@ export function calculateLayout(graph: LineageGraph, config: Partial<LayoutConfi
         let prev = from;
         const lanes: Item[] = [];
         for (let r = from.rank + 1; r < to.rank; r++) {
-            const lane: Item = { rank: r, size: 0, center: 0, up: [], down: [] };
+            const lane: Item = { rank: r, above: 0, below: 0, center: 0, up: [], down: [] };
             ranks[r].push(lane);
             lanes.push(lane);
             link(prev, lane);
@@ -95,8 +98,8 @@ export function calculateLayout(graph: LineageGraph, config: Partial<LayoutConfi
     // Top of the drawing at paddingY; short graphs are centred in the minimum height
     let top = Infinity, bottom = -Infinity;
     for (const item of ranks.flat()) {
-        top = Math.min(top, item.center - item.size / 2);
-        bottom = Math.max(bottom, item.center + item.size / 2);
+        top = Math.min(top, item.center - item.above);
+        bottom = Math.max(bottom, item.center + item.below);
     }
     const contentHeight = bottom - top + cfg.paddingY * 2;
     const height = Math.max(contentHeight, MIN_HEIGHT);
@@ -106,7 +109,7 @@ export function calculateLayout(graph: LineageGraph, config: Partial<LayoutConfi
     for (const item of ranks.flat()) {
         if (item.node) {
             item.node.x = columnX(item.rank);
-            item.node.y = item.center + shift - cfg.nodeHeight / 2;
+            item.node.y = item.center + shift - item.above;
         }
     }
     for (const edge of graph.edges) {
@@ -186,10 +189,10 @@ function byName(a: Item, b: Item): number {
     return (a.node?.name ?? '').localeCompare(b.node?.name ?? '');
 }
 
-/** Minimum distance between the centres of two neighbouring items in one layer. */
+/** Minimum distance between the anchors of `a` and the item `b` right below it in one layer. */
 function separation(a: Item, b: Item, cfg: LayoutConfig): number {
-    if (a.node && b.node) { return cfg.nodeSpacing; }
-    return a.size / 2 + b.size / 2 + LANE_GAP;
+    const gap = a.node && b.node ? cfg.nodeSpacing - cfg.nodeHeight : LANE_GAP;
+    return a.below + b.above + gap;
 }
 
 /**

@@ -51,9 +51,10 @@ suite('lineageHtml', () => {
 
     test('section omits CTE and target counts when there are none', () => {
         const html = renderQuerySection(section('SELECT 1', ['SOURCE']), 0);
-        assert.ok(html.includes('1 source<'));
-        assert.ok(!html.includes(' CTE'));
-        assert.ok(!html.includes(' target'));
+        const stats = /<div class="query-stats">([\s\S]*?)<\/div>/.exec(html)![1];
+        assert.ok(stats.includes('1 source<'));
+        assert.ok(!stats.includes(' CTE'));
+        assert.ok(!stats.includes(' target'));
     });
 
     test('page header counts queries with singular / plural', () => {
