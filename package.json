@@ -927,6 +927,12 @@
 					"type": "tree"
 				},
 				{
+					"id": "fabric-sql-spark",
+					"name": "Spark",
+					"contextualTitle": "Fabric SQL",
+					"type": "tree"
+				},
+				{
 					"id": "fabric-sql-query-history",
 					"name": "Query History",
 					"contextualTitle": "Fabric SQL",
@@ -938,12 +944,6 @@
 					"contextualTitle": "Fabric SQL",
 					"type": "tree",
 					"visibility": "collapsed"
-				},
-				{
-					"id": "fabric-sql-spark",
-					"name": "Spark",
-					"contextualTitle": "Fabric SQL",
-					"type": "tree"
 				}
 			]
 		},
