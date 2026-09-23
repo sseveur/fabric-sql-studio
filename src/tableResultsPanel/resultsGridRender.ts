@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { getExtensionUri } from '../extension';
-import { COMMAND_DOWNLOAD_CSV, COMMAND_DOWNLOAD_JSONL, COMMAND_COPY_CLIPBOARD } from '../extensionCommands';
+import { COMMAND_DOWNLOAD_CSV, COMMAND_DOWNLOAD_JSONL, COMMAND_COPY_CLIPBOARD } from '../commands/ids';
 import { SqlPageRequest, SqlPageResponse, GridHostMessage } from './resultContract';
 import { getResultPage } from '../services/sqlServerClient';
 

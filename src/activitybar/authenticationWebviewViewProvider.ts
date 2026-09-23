@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { getExtensionUri } from '../extension';
-import * as commands from '../extensionCommands';
+import * as commands from '../commands/ids';
 import { currentProfile, getAccountLabel, setAuthMode } from '../services/auth';
 import { getNonce, getCspMetaTag } from '../utils/webviewSecurity';
 

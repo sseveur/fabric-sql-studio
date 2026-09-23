@@ -3,7 +3,7 @@ import { ObjectTreeItem } from './objectTreeItem';
 import { getActiveConnection, getConnections, getPinnedObjectKeys, isPinned } from '../services/connections';
 import { bracket, ConnectionRef, ObjectRef, parseKey } from '../services/objectRef';
 import { clientFor } from '../services/sqlServerClient';
-import { getTableIndexService } from '../extensionCommands';
+import { getTableIndexService } from '../commands/explorer';
 
 /**
  * Explorer: connections → databases → schemas → tables / views (+ a Routines folder).

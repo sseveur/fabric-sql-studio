@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import * as commands from '../extensionCommands';
+import * as commands from '../commands/ids';
 import { Icons } from '../icons';
 import { ObjectRef } from '../services/objectRef';
 

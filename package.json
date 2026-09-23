@@ -582,7 +582,7 @@
 				"icon": "$(link-external)"
 			},
 			{
-				"command": "fabricSql.set-default-project",
+				"command": "fabricSql.use-connection",
 				"title": "Fabric SQL: Use This Connection",
 				"icon": "$(issue-closed)"
 			},
@@ -913,7 +913,7 @@
 					"when": "viewItem == 'sql-table' || viewItem == 'sql-pinned-table' || viewItem == 'sql-table-already-pinned'"
 				},
 				{
-					"command": "fabricSql.set-default-project",
+					"command": "fabricSql.use-connection",
 					"when": "viewItem == 'sql-connection'",
 					"group": "inline"
 				},

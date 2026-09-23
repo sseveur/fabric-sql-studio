@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { COMMAND_DOWNLOAD_CSV, COMMAND_DOWNLOAD_JSONL, COMMAND_RUN_QUERY } from '../../extensionCommands';
+import { COMMAND_DOWNLOAD_CSV, COMMAND_DOWNLOAD_JSONL, COMMAND_RUN_QUERY } from '../../commands/ids';
 import { LocalMemento } from './localMemento';
 
 suite('Extension Test Suite', async () => {

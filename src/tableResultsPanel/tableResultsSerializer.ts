@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { COMMAND_VIEW_TABLE } from '../extensionCommands';
+import { COMMAND_VIEW_TABLE } from '../commands/ids';
 import { parseKey } from '../services/objectRef';
 
 /** Restores a table-preview panel after restart: the panel title is the object's ref key. */

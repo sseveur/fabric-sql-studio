@@ -173,8 +173,8 @@ export function activate(context: ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
-			commands.COMMAND_SET_DEFAULT_PROJECT,
-			commands.commandSetDefaultProject
+			commands.COMMAND_USE_CONNECTION,
+			commands.commandUseConnection
 		)
 	);
 
