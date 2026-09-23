@@ -23,7 +23,8 @@
 		"onView:fabric-sql-main-activity-bar",
 		"onWebviewPanel:fabric-sql-query-results",
 		"onWebviewPanel:fabric-sql-table-results",
-		"onLanguage:sql"
+		"onLanguage:sql",
+		"onLanguage:fsql"
 	],
 	"main": "./dist/extension.js",
 	"contributes": {
