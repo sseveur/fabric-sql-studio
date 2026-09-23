@@ -1,0 +1,1005 @@
+{
+	"name": "bigquery-studio",
+	"displayName": "BigQuery Studio",
+	"description": "Fork of bstruct/vscode-bigquery. A powerful Google BigQuery extension with offline-ready charting, query execution, data browsing, SQL intellisense, cost estimation, and data lineage visualization.",
+	"version": "2.12.1",
+	"publisher": "s-seveur",
+	"icon": "logo.png",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/sseveur/vscode-bigquery.git"
+	},
+	"homepage": "https://github.com/sseveur/vscode-bigquery",
+	"bugs": {
+		"url": "https://github.com/sseveur/vscode-bigquery/issues"
+	},
+	"engines": {
+		"vscode": "^1.63.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [
+		"onView:bigquery-main-activity-bar",
+		"onWebviewPanel:bigquery-query-results",
+		"onWebviewPanel:bigquery-table-results",
+		"onWebviewPanel:authentication-troubleshoot",
+		"onLanguage:sql"
+	],
+	"main": "./dist/extension.js",
+	"contributes": {
+		"configuration": [
+			{
+				"title": "BigQuery Studio",
+				"properties": {
+					"vscode-bigquery.associateSqlFiles": {
+						"type": "boolean",
+						"default": false,
+						"scope": "machine-overridable",
+						"order": 1,
+						"title": "Associate .sql files",
+						"description": "When enabled, .sql files are automatically treated as BigQuery SQL with all extension features"
+					},
+					"vscode-bigquery.autoRevealResults": {
+						"type": "boolean",
+						"default": true,
+						"scope": "machine-overridable",
+						"order": 2,
+						"title": "Auto-Reveal Results Panel",
+						"description": "Automatically reveal the results panel when switching to a BigQuery SQL file that has results. Disable to prevent focus switching."
+					},
+					"vscode-bigquery.gcloudPath": {
+						"type": "string",
+						"default": "",
+						"scope": "machine-overridable",
+						"order": 3,
+						"title": "gcloud Executable Path",
+						"description": "Full path to the gcloud executable. Leave empty to auto-detect from PATH and common install locations (/opt/homebrew/bin, /usr/local/bin, ~/google-cloud-sdk/bin). Set this if VS Code cannot find gcloud when launched from the Dock/Finder."
+					},
+					"vscode-bigquery.defaultLocation": {
+						"type": "string",
+						"default": "",
+						"scope": "machine-overridable",
+						"order": 4,
+						"title": "Default Query Location",
+						"description": "BigQuery processing location for query jobs (e.g. US, EU, australia-southeast1, asia-east1). When empty, auto-detects from the first FROM clause via datasets.get. Set explicitly to override detection or for unqualified/CTE-only queries."
+					},
+					"vscode-bigquery.costPerTB": {
+						"type": "number",
+						"default": 6.25,
+						"minimum": 0,
+						"maximum": 100,
+						"scope": "machine-overridable",
+						"order": 5,
+						"title": "Cost per TB ($)",
+						"description": "BigQuery cost per terabyte for query cost estimation. Default is $6.25 (on-demand pricing). Set to 0 to hide cost estimates."
+					},
+					"vscode-bigquery.autoPreviewCreatedTables": {
+						"type": "boolean",
+						"default": false,
+						"scope": "machine-overridable",
+						"order": 6,
+						"title": "Auto-Preview Created Tables",
+						"description": "Automatically preview first 100 rows when CREATE TABLE completes successfully (disabled by default)"
+					}
+				}
+			},
+			{
+				"title": "BigQuery Studio › Explorer",
+				"properties": {
+					"vscode-bigquery.pinned-projects": {
+						"type": "array",
+						"default": [],
+						"scope": "machine-overridable",
+						"order": 1,
+						"title": "Pinned projects",
+						"description": "Pinned GCP projects id's in the explorer tree in the Bigquery extension"
+					},
+					"vscode-bigquery.pinned-tables": {
+						"type": "array",
+						"default": [],
+						"scope": "machine-overridable",
+						"order": 2,
+						"title": "Pinned Tables",
+						"description": "Tables pinned in explorer for quick access. Format: project.dataset.table"
+					},
+					"vscode-bigquery.projects": {
+						"type": "array",
+						"default": [],
+						"scope": "machine-overridable",
+						"order": 3,
+						"title": "Projects",
+						"description": "GCP projects id's that need to be listed, but there's no explicit permission to the project, only datasets"
+					},
+					"vscode-bigquery.tables": {
+						"type": "array",
+						"default": [],
+						"scope": "machine-overridable",
+						"order": 4,
+						"title": "Table full name",
+						"description": "Tables that need to be listed, but there's no explicit permission to the project nor dataset, only the table"
+					},
+					"vscode-bigquery.hidden-projects": {
+						"type": "array",
+						"default": [],
+						"scope": "machine-overridable",
+						"order": 5,
+						"title": "Hidden projects",
+						"description": "GCP projects id's that are hidden from the explorer tree in the Bigquery extension"
+					}
+				}
+			},
+			{
+				"title": "BigQuery Studio › Results & Clipboard",
+				"properties": {
+					"vscode-bigquery.clipboardSizeLimitKb": {
+						"type": "number",
+						"default": 1024,
+						"minimum": 1,
+						"maximum": 102400,
+						"scope": "machine-overridable",
+						"order": 1,
+						"title": "Clipboard Copy Size Limit (KB)",
+						"description": "Maximum size of data (in KB) to copy to clipboard. When exceeded, you will be prompted to truncate or cancel."
+					},
+					"vscode-bigquery.copyTablePathBackticks": {
+						"type": "boolean",
+						"default": true,
+						"scope": "machine-overridable",
+						"order": 2,
+						"title": "Copy Table Path: Wrap in Backticks",
+						"description": "When copying a table path (right-click → Copy Table Path), wrap it in backticks so it's ready to paste directly into a BigQuery FROM clause."
+					},
+					"vscode-bigquery.gridColors": {
+						"type": "object",
+						"scope": "machine-overridable",
+						"order": 3,
+						"title": "Grid: Cell Color Scheme",
+						"description": "Override cell text colors per BigQuery type. Leave empty to inherit from the active VS Code theme. Supports any CSS color (hex, rgb, hsl, named).",
+						"properties": {
+							"number": {
+								"type": "string",
+								"description": "INT64, FLOAT, NUMERIC, BIGNUMERIC. Default: var(--vscode-charts-blue, #4fc1ff)"
+							},
+							"boolean": {
+								"type": "string",
+								"description": "BOOL. Default: var(--vscode-charts-purple, #c586c0)"
+							},
+							"timestamp": {
+								"type": "string",
+								"description": "TIMESTAMP, DATE, DATETIME, TIME. Default: var(--vscode-charts-orange, #ce9178)"
+							},
+							"struct": {
+								"type": "string",
+								"description": "STRUCT, RECORD, JSON. Default: blended teal"
+							},
+							"bytes": {
+								"type": "string",
+								"description": "BYTES, GEOGRAPHY. Default: blended yellow"
+							},
+							"string": {
+								"type": "string",
+								"description": "STRING. Default: neutral (inherits foreground)"
+							},
+							"null": {
+								"type": "string",
+								"description": "NULL cells. Default: var(--vscode-inputValidation-warningBorder, #c5a300)"
+							}
+						},
+						"default": {}
+					}
+				}
+			},
+			{
+				"title": "BigQuery Studio › CTE Preview",
+				"properties": {
+					"vscode-bigquery.enableCtePreviewCodeLens": {
+						"type": "boolean",
+						"default": true,
+						"scope": "machine-overridable",
+						"order": 1,
+						"title": "Enable CTE Preview CodeLens",
+						"description": "Show a clickable 'Preview CTE' link above each CTE in a WITH clause. Clicking runs that CTE (with its upstream dependencies) and shows the rows."
+					},
+					"vscode-bigquery.ctePreviewRowLimit": {
+						"type": "number",
+						"default": 100,
+						"minimum": 1,
+						"maximum": 100000,
+						"scope": "machine-overridable",
+						"order": 2,
+						"title": "CTE Preview Row Limit",
+						"description": "Number of rows to fetch when previewing a CTE via the CodeLens (LIMIT appended to the rewritten query)."
+					}
+				}
+			},
+			{
+				"title": "BigQuery Studio › Formatting",
+				"properties": {
+					"vscode-bigquery.formatIndentStyle": {
+						"type": "string",
+						"default": "standard",
+						"enum": [
+							"standard",
+							"tabularLeft",
+							"tabularRight"
+						],
+						"scope": "machine-overridable",
+						"order": 1,
+						"title": "Format: Indent Style",
+						"description": "SQL indent style. standard = normal indentation, tabularLeft/Right = aligned keywords"
+					},
+					"vscode-bigquery.formatLeadingCommas": {
+						"type": "boolean",
+						"default": true,
+						"scope": "machine-overridable",
+						"order": 2,
+						"title": "Format: Leading Commas",
+						"description": "Use leading comma style (comma at start of line) instead of trailing commas"
+					},
+					"vscode-bigquery.formatExpressionWidth": {
+						"type": "number",
+						"default": 50,
+						"minimum": 1,
+						"maximum": 200,
+						"scope": "machine-overridable",
+						"order": 3,
+						"title": "Format: Expression Width",
+						"description": "Maximum width of expressions before breaking into multiple lines. Lower values = more line breaks."
+					},
+					"vscode-bigquery.formatInlineKeyClauses": {
+						"type": "boolean",
+						"default": false,
+						"scope": "machine-overridable",
+						"order": 4,
+						"title": "Format: Inline GROUP BY / ORDER BY",
+						"description": "Keep GROUP BY and ORDER BY item lists on a single line when they fit within 'Format: Expression Width', wrapping at commas only when they exceed it. SELECT is left expanded. Off by default."
+					},
+					"vscode-bigquery.formatNewlineBeforeSemicolon": {
+						"type": "boolean",
+						"default": false,
+						"scope": "machine-overridable",
+						"order": 5,
+						"title": "Format: Newline Before Semicolon",
+						"description": "Place semicolon on a separate line at the end of statements"
+					},
+					"vscode-bigquery.formatDenseOperators": {
+						"type": "boolean",
+						"default": false,
+						"scope": "machine-overridable",
+						"order": 6,
+						"title": "Format: Dense Operators",
+						"description": "Pack operators without surrounding spaces (e.g., 1+1 instead of 1 + 1)"
+					},
+					"vscode-bigquery.formatLogicalOperatorNewline": {
+						"type": "string",
+						"default": "before",
+						"enum": [
+							"before",
+							"after"
+						],
+						"scope": "machine-overridable",
+						"order": 7,
+						"title": "Format: Logical Operator Newline",
+						"description": "Where to place newlines for AND/OR operators"
+					},
+					"vscode-bigquery.formatLogicalOperatorStyle": {
+						"type": "string",
+						"default": "indented",
+						"enum": [
+							"keywordAligned",
+							"contentAligned",
+							"indented"
+						],
+						"scope": "machine-overridable",
+						"order": 8,
+						"title": "Format: Logical Operator Style",
+						"description": "How AND/OR/ON are positioned relative to their parent clause. 'keywordAligned' treats them as alignment keywords, 'contentAligned' aligns them with the clause content, 'indented' (default) indents AND/OR/ON one level under the parent keyword."
+					},
+					"vscode-bigquery.formatKeywordCase": {
+						"type": "string",
+						"default": "upper",
+						"enum": [
+							"upper",
+							"lower",
+							"preserve"
+						],
+						"scope": "machine-overridable",
+						"order": 9,
+						"title": "Format: Keyword Case",
+						"description": "How to format SQL keywords (SELECT, FROM, etc.)"
+					},
+					"vscode-bigquery.formatFunctionCase": {
+						"type": "string",
+						"default": "preserve",
+						"enum": [
+							"upper",
+							"lower",
+							"preserve"
+						],
+						"scope": "machine-overridable",
+						"order": 10,
+						"title": "Format: Function Case",
+						"description": "How to format function names (COUNT, SUM, etc.)"
+					},
+					"vscode-bigquery.formatIdentifierCase": {
+						"type": "string",
+						"default": "preserve",
+						"enum": [
+							"upper",
+							"lower",
+							"preserve"
+						],
+						"scope": "machine-overridable",
+						"order": 11,
+						"title": "Format: Identifier Case",
+						"description": "How to format identifiers (table names, column names)"
+					},
+					"vscode-bigquery.formatDataTypeCase": {
+						"type": "string",
+						"default": "preserve",
+						"enum": [
+							"upper",
+							"lower",
+							"preserve"
+						],
+						"scope": "machine-overridable",
+						"order": 12,
+						"title": "Format: Data Type Case",
+						"description": "How to format data types (INT64, STRING, etc.)"
+					},
+					"vscode-bigquery.completionKeywordCase": {
+						"type": "string",
+						"default": "upper",
+						"enum": [
+							"upper",
+							"lower",
+							"preserve"
+						],
+						"scope": "machine-overridable",
+						"order": 13,
+						"title": "Completion: Keyword Case",
+						"description": "Case used when inserting SQL keyword completions (SELECT, FROM, WHERE, etc.)"
+					},
+					"vscode-bigquery.completionFunctionCase": {
+						"type": "string",
+						"default": "preserve",
+						"enum": [
+							"upper",
+							"lower",
+							"preserve"
+						],
+						"scope": "machine-overridable",
+						"order": 14,
+						"title": "Completion: Function Case",
+						"description": "Case used when inserting function name completions (COUNT, SUM, etc.). 'preserve' keeps BigQuery's uppercase convention."
+					}
+				}
+			},
+			{
+				"title": "BigQuery Studio › Lineage",
+				"properties": {
+					"vscode-bigquery.lineageExportTheme": {
+						"type": "string",
+						"default": "dark",
+						"enum": [
+							"dark",
+							"light"
+						],
+						"enumDescriptions": [
+							"Dark background with light text (default)",
+							"White background with dark text (better for printing)"
+						],
+						"scope": "machine-overridable",
+						"order": 1,
+						"title": "Lineage Export Theme",
+						"description": "Theme to use when exporting lineage charts as PNG or PDF. Light theme uses white background with dark text, which may improve text visibility and is better for printing."
+					}
+				}
+			}
+		],
+		"languages": [
+			{
+				"id": "bqsql",
+				"aliases": [
+					"BigQuery SQL"
+				],
+				"configuration": "./resources/language/bqsql-language-configuration.json",
+				"extensions": [
+					"bqsql",
+					"sql"
+				],
+				"icon": {
+					"light": "./resources/google-bigquery.svg",
+					"dark": "./resources/google-bigquery.svg"
+				}
+			}
+		],
+		"grammars": [
+			{
+				"language": "bqsql",
+				"scopeName": "source.bqsql",
+				"path": "./resources/language/bqsql.tmGrammar.json"
+			},
+			{
+				"scopeName": "source.sql.bqsql-injection",
+				"path": "./resources/language/bqsql.tmGrammar.json",
+				"injectTo": [
+					"source.sql"
+				]
+			}
+		],
+		"snippets": [
+			{
+				"language": "bqsql",
+				"path": "./resources/language/snippets.json"
+			}
+		],
+		"configurationDefaults": {
+			"[bqsql]": {
+				"editor.semanticHighlighting.enabled": true
+			},
+			"[sql]": {
+				"editor.semanticHighlighting.enabled": true
+			}
+		},
+		"commands": [
+			{
+				"command": "vscode-bigquery.run-query",
+				"title": "BigQuery: Run Query",
+				"icon": "$(debug-start)"
+			},
+			{
+				"command": "vscode-bigquery.run-selected-query",
+				"title": "BigQuery: Run Selected Query",
+				"icon": "$(debug-line-by-line)"
+			},
+			{
+				"command": "vscode-bigquery.profile-column",
+				"title": "BigQuery: Profile Column",
+				"icon": "$(graph)"
+			},
+			{
+				"command": "vscode-bigquery.preview-table-at-cursor",
+				"title": "BigQuery: Preview Table",
+				"icon": "$(table)"
+			},
+			{
+				"command": "vscode-bigquery.user-login",
+				"title": "BigQuery: User Login"
+			},
+			{
+				"command": "vscode-bigquery.service-account-login",
+				"title": "BigQuery: Service Account Login"
+			},
+			{
+				"command": "vscode-bigquery.user-login-no-launch-browser",
+				"title": "BigQuery: User Login via Console"
+			},
+			{
+				"command": "vscode-bigquery.user-login-drive",
+				"title": "BigQuery: User Login with Google Drive"
+			},
+			{
+				"command": "vscode-bigquery.gcloud-init",
+				"title": "BigQuery: Initialize gcloud"
+			},
+			{
+				"command": "vscode-bigquery.authentication-refresh",
+				"title": "BigQuery: Refresh Authentication",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "vscode-bigquery.gcp-user-activate",
+				"title": "BigQuery: Activate User",
+				"icon": "$(check)"
+			},
+			{
+				"command": "vscode-bigquery.gcp-user-remove",
+				"title": "BigQuery: Remove User",
+				"icon": "$(close)"
+			},
+			{
+				"command": "vscode-bigquery.explorer-refresh",
+				"title": "BigQuery: Refresh Explorer",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "vscode-bigquery.view-table",
+				"title": "BigQuery: Preview",
+				"icon": "$(link-external)"
+			},
+			{
+				"command": "vscode-bigquery.view-table-schema",
+				"title": "BigQuery: Preview Schema",
+				"icon": "$(symbol-class)"
+			},
+			{
+				"command": "vscode-bigquery.create-table-default-query",
+				"title": "BigQuery: Create Query",
+				"icon": "$(file-text)"
+			},
+			{
+				"command": "vscode-bigquery.open-ddl",
+				"title": "BigQuery: Open DDL",
+				"icon": "$(link-external)"
+			},
+			{
+				"command": "vscode-bigquery.set-default-project",
+				"title": "BigQuery: Set Default Project",
+				"icon": "$(issue-closed)"
+			},
+			{
+				"command": "vscode-bigquery.project-pin",
+				"title": "BigQuery: Pin/Unpin Project",
+				"icon": "$(pin)"
+			},
+			{
+				"command": "vscode-bigquery.project-hide",
+				"title": "BigQuery: Hide Project",
+				"icon": "$(eye-closed)"
+			},
+			{
+				"command": "vscode-bigquery.show-hidden-projects",
+				"title": "BigQuery: Show Hidden Projects"
+			},
+			{
+				"command": "vscode-bigquery.download-csv",
+				"title": "BigQuery: Download CSV",
+				"icon": "$(cloud-download)"
+			},
+			{
+				"command": "vscode-bigquery.send-pubsub",
+				"title": "BigQuery: Send to Pub/Sub",
+				"icon": "$(outline-view-icon)"
+			},
+			{
+				"command": "vscode-bigquery.download-jsonl",
+				"title": "BigQuery: Download JSONL",
+				"icon": "$(json)"
+			},
+			{
+				"command": "vscode-bigquery.copy-to-clipboard",
+				"title": "BigQuery: Copy to Clipboard",
+				"icon": "$(clippy)"
+			},
+			{
+				"command": "vscode-bigquery.troubleshoot",
+				"title": "BigQuery: Troubleshoot"
+			},
+			{
+				"command": "vscode-bigquery.open-settings-projects",
+				"title": "BigQuery: Open Settings - Projects"
+			},
+			{
+				"command": "vscode-bigquery.format-query",
+				"title": "BigQuery: Format SQL",
+				"icon": "$(symbol-structure)"
+			},
+			{
+				"command": "vscode-bigquery.history-rerun",
+				"title": "BigQuery: Re-run Query",
+				"icon": "$(debug-start)"
+			},
+			{
+				"command": "vscode-bigquery.history-copy",
+				"title": "BigQuery: Copy Query",
+				"icon": "$(copy)"
+			},
+			{
+				"command": "vscode-bigquery.history-show",
+				"title": "BigQuery: Show Query"
+			},
+			{
+				"command": "vscode-bigquery.history-delete",
+				"title": "BigQuery: Delete from History",
+				"icon": "$(trash)"
+			},
+			{
+				"command": "vscode-bigquery.history-clear",
+				"title": "BigQuery: Clear All History",
+				"icon": "$(clear-all)"
+			},
+			{
+				"command": "vscode-bigquery.history-refresh",
+				"title": "BigQuery: Refresh History",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "vscode-bigquery.job-history-refresh",
+				"title": "BigQuery: Refresh Job History",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "vscode-bigquery.job-history-toggle-all-users",
+				"title": "BigQuery: Job History — Toggle All Users",
+				"icon": "$(organization)"
+			},
+			{
+				"command": "vscode-bigquery.job-history-open-results",
+				"title": "BigQuery: Open Job Results",
+				"icon": "$(table)"
+			},
+			{
+				"command": "vscode-bigquery.job-history-details",
+				"title": "BigQuery: Job Details",
+				"icon": "$(info)"
+			},
+			{
+				"command": "vscode-bigquery.show-lineage",
+				"title": "BigQuery: Show Data Lineage",
+				"icon": "$(type-hierarchy)"
+			},
+			{
+				"command": "vscode-bigquery.show-lineage-selection",
+				"title": "BigQuery: Show Data Lineage for Selection",
+				"icon": "$(type-hierarchy)"
+			},
+			{
+				"command": "vscode-bigquery.refresh-schema-cache",
+				"title": "BigQuery: Refresh Schema Cache",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "vscode-bigquery.set-lineage-export-theme",
+				"title": "BigQuery: Toggle Lineage Export Theme",
+				"icon": "$(arrow-swap)"
+			},
+			{
+				"command": "vscode-bigquery.revoke-session",
+				"title": "BigQuery: Revoke Session",
+				"icon": "$(sign-out)"
+			},
+			{
+				"command": "vscode-bigquery.pin-table",
+				"title": "BigQuery: Pin Table",
+				"icon": "$(pin)"
+			},
+			{
+				"command": "vscode-bigquery.unpin-table",
+				"title": "BigQuery: Unpin Table",
+				"icon": "$(pinned)"
+			},
+			{
+				"command": "vscode-bigquery.search-tables",
+				"title": "BigQuery: Search Tables",
+				"icon": "$(search)"
+			},
+			{
+				"command": "vscode-bigquery.clear-search",
+				"title": "BigQuery: Clear Search",
+				"icon": "$(close)"
+			},
+			{
+				"command": "vscode-bigquery.copy-table-path",
+				"title": "BigQuery: Copy Table Path",
+				"icon": "$(copy)"
+			},
+			{
+				"command": "vscode-bigquery.build-table-index",
+				"title": "BigQuery: Build Table Index",
+				"icon": "$(database)"
+			},
+			{
+				"command": "vscode-bigquery.clear-extension-cache",
+				"title": "BigQuery: Clear Extension State Cache"
+			},
+			{
+				"command": "vscode-bigquery.open-as-notebook",
+				"title": "BigQuery: Open as Notebook",
+				"icon": "$(notebook)"
+			},
+			{
+				"command": "vscode-bigquery.open-as-text",
+				"title": "BigQuery: Open as Text",
+				"icon": "$(code)"
+			}
+		],
+		"notebooks": [
+			{
+				"type": "bigquery-sql-notebook",
+				"displayName": "BigQuery SQL Notebook",
+				"selector": [
+					{
+						"filenamePattern": "*.bqsql"
+					},
+					{
+						"filenamePattern": "*.sql"
+					}
+				],
+				"priority": "option"
+			}
+		],
+		"notebookRenderer": [
+			{
+				"id": "bigquery-grid-renderer",
+				"displayName": "BigQuery Results Grid",
+				"entrypoint": "./resources/notebook-renderer.js",
+				"mimeTypes": [
+					"application/vnd.bigquery.grid+json"
+				],
+				"requiresMessaging": "optional"
+			}
+		],
+		"menus": {
+			"editor/title": [
+				{
+					"command": "vscode-bigquery.run-query",
+					"group": "navigation@-3",
+					"when": "editorLangId == bqsql || editorLangId == sql"
+				},
+				{
+					"command": "vscode-bigquery.run-selected-query",
+					"group": "navigation@-2",
+					"when": "editorLangId == bqsql || editorLangId == sql"
+				},
+				{
+					"command": "vscode-bigquery.show-lineage",
+					"group": "navigation@-1",
+					"when": "editorLangId == bqsql || editorLangId == sql"
+				},
+				{
+					"command": "vscode-bigquery.open-as-notebook",
+					"group": "navigation@100",
+					"when": "editorLangId == bqsql || editorLangId == sql"
+				},
+				{
+					"command": "vscode-bigquery.open-as-text",
+					"group": "navigation@100",
+					"when": "notebookType == bigquery-sql-notebook"
+				}
+			],
+			"editor/context": [
+				{
+					"command": "vscode-bigquery.show-lineage-selection",
+					"group": "1_modification",
+					"when": "editorHasSelection && (editorLangId == bqsql || editorLangId == sql)"
+				},
+				{
+					"command": "vscode-bigquery.profile-column",
+					"group": "1_modification",
+					"when": "editorLangId == bqsql || editorLangId == sql"
+				},
+				{
+					"command": "vscode-bigquery.preview-table-at-cursor",
+					"group": "1_modification",
+					"when": "editorLangId == bqsql || editorLangId == sql"
+				}
+			],
+			"view/title": [
+				{
+					"command": "vscode-bigquery.authentication-refresh",
+					"group": "navigation",
+					"when": "view == 'bigquery-authentication'"
+				},
+				{
+					"command": "vscode-bigquery.explorer-refresh",
+					"group": "navigation",
+					"when": "view == 'bigquery-tree-data-provider'"
+				},
+				{
+					"command": "vscode-bigquery.search-tables",
+					"group": "navigation",
+					"when": "view == 'bigquery-tree-data-provider'"
+				},
+				{
+					"command": "vscode-bigquery.clear-search",
+					"group": "navigation",
+					"when": "view == 'bigquery-tree-data-provider' && bigquery.isSearching"
+				},
+				{
+					"command": "vscode-bigquery.history-refresh",
+					"group": "navigation",
+					"when": "view == 'bigquery-query-history'"
+				},
+				{
+					"command": "vscode-bigquery.history-clear",
+					"group": "navigation",
+					"when": "view == 'bigquery-query-history'"
+				},
+				{
+					"command": "vscode-bigquery.job-history-refresh",
+					"group": "navigation",
+					"when": "view == 'bigquery-job-history'"
+				},
+				{
+					"command": "vscode-bigquery.job-history-toggle-all-users",
+					"group": "navigation",
+					"when": "view == 'bigquery-job-history'"
+				}
+			],
+			"view/item/context": [
+				{
+					"command": "vscode-bigquery.job-history-open-results",
+					"when": "viewItem == 'job-history-job-results'",
+					"group": "inline"
+				},
+				{
+					"command": "vscode-bigquery.job-history-details",
+					"when": "viewItem == 'job-history-job-results' || viewItem == 'job-history-job'",
+					"group": "inline"
+				},
+				{
+					"command": "vscode-bigquery.view-table",
+					"when": "viewItem == 'bq-table' || viewItem == 'bq-pinned-table' || viewItem == 'bq-table-already-pinned'"
+				},
+				{
+					"command": "vscode-bigquery.view-table-schema",
+					"when": "viewItem == 'bq-table' || viewItem == 'bq-pinned-table' || viewItem == 'bq-table-already-pinned'"
+				},
+				{
+					"command": "vscode-bigquery.create-table-default-query",
+					"when": "viewItem == 'bq-table' || viewItem == 'bq-pinned-table' || viewItem == 'bq-table-already-pinned'"
+				},
+				{
+					"command": "vscode-bigquery.open-ddl",
+					"when": "viewItem == 'bq-table' || viewItem == 'bq-pinned-table' || viewItem == 'bq-table-already-pinned' || viewItem == 'bq-routine'"
+				},
+				{
+					"command": "vscode-bigquery.pin-table",
+					"when": "viewItem == 'bq-table'",
+					"group": "inline"
+				},
+				{
+					"command": "vscode-bigquery.unpin-table",
+					"when": "viewItem == 'bq-pinned-table' || viewItem == 'bq-table-already-pinned'",
+					"group": "inline"
+				},
+				{
+					"command": "vscode-bigquery.copy-table-path",
+					"when": "viewItem == 'bq-table' || viewItem == 'bq-pinned-table' || viewItem == 'bq-table-already-pinned'"
+				},
+				{
+					"command": "vscode-bigquery.gcp-user-activate",
+					"when": "viewItem == 'gcp-user'",
+					"group": "inline"
+				},
+				{
+					"command": "vscode-bigquery.gcp-user-remove",
+					"when": "viewItem == 'gcp-user'",
+					"group": "inline"
+				},
+				{
+					"command": "vscode-bigquery.set-default-project",
+					"when": "viewItem == 'bq-gcp-project'",
+					"group": "inline"
+				},
+				{
+					"command": "vscode-bigquery.project-pin",
+					"when": "viewItem == 'bq-gcp-project'",
+					"group": "inline"
+				},
+				{
+					"command": "vscode-bigquery.project-hide",
+					"when": "viewItem == 'bq-gcp-project'",
+					"group": "inline"
+				},
+				{
+					"command": "vscode-bigquery.history-rerun",
+					"when": "viewItem == 'history-query'",
+					"group": "inline"
+				},
+				{
+					"command": "vscode-bigquery.history-copy",
+					"when": "viewItem == 'history-query'",
+					"group": "inline"
+				},
+				{
+					"command": "vscode-bigquery.history-delete",
+					"when": "viewItem == 'history-query'",
+					"group": "inline"
+				}
+			]
+		},
+		"views": {
+			"bigquery-main-activity-bar": [
+				{
+					"id": "bigquery-authentication",
+					"name": "Authentication",
+					"contextualTitle": "BigQuery",
+					"type": "webview"
+				},
+				{
+					"id": "bigquery-tree-data-provider",
+					"name": "Explorer",
+					"contextualTitle": "BigQuery",
+					"type": "tree"
+				},
+				{
+					"id": "bigquery-query-history",
+					"name": "Query History",
+					"contextualTitle": "BigQuery",
+					"type": "tree"
+				},
+				{
+					"id": "bigquery-job-history",
+					"name": "Job History (server)",
+					"contextualTitle": "BigQuery",
+					"type": "tree",
+					"visibility": "collapsed"
+				}
+			]
+		},
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "bigquery-main-activity-bar",
+					"title": "BigQuery",
+					"icon": "./resources/google-bigquery.svg"
+				}
+			]
+		},
+		"keybindings": [
+			{
+				"command": "vscode-bigquery.run-query",
+				"key": "Ctrl+Enter",
+				"when": "editorLangId == bqsql || editorLangId == sql"
+			},
+			{
+				"command": "vscode-bigquery.run-selected-query",
+				"key": "Ctrl+E",
+				"when": "editorLangId == bqsql || editorLangId == sql"
+			},
+			{
+				"command": "vscode-bigquery.format-query",
+				"key": "Shift+Alt+F",
+				"when": "editorLangId == bqsql || editorLangId == sql"
+			}
+		],
+		"viewsWelcome": [
+			{
+				"view": "bigquery-tree-data-provider",
+				"contents": "No Google Cloud projects found or still loading.\n\nIf you are presented with an error, please try to find your problem in the [troubleshoot](command:vscode-bigquery.troubleshoot) guide.\nIf the permissions to GCP were given to dataset or table level (not project), it's possible to specify the project (of the target dataset) and/or table in the settings.\n[Add Project directly in Settings](command:vscode-bigquery.open-settings-projects)\n[Add Table directly in Settings](command:vscode-bigquery.open-settings-tables)"
+			}
+		]
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run package",
+		"compile": "webpack",
+		"watch": "webpack --watch",
+		"package": "webpack --mode production --devtool hidden-source-map",
+		"compile-tests": "tsc -p . --outDir out",
+		"watch-tests": "tsc -p . -w --outDir out",
+		"pretest": "npm run compile-tests && npm run compile && npm run lint",
+		"lint": "eslint src --ext ts",
+		"test": "node ./out/test/runTest.js",
+		"test:unit": "npm run compile-tests && mocha \"out/test/unit/**/*.test.js\" --require ./out/test/unit/_setup.js --ui tdd --timeout 10000",
+		"deploy": "vsce publish",
+		"package-dev": "vsce package --pre-release"
+	},
+	"devDependencies": {
+		"@types/glob": "^7.2.0",
+		"@types/jsdom": "^27.0.0",
+		"@types/mocha": "^9.1.1",
+		"@types/node": "16.x",
+		"@types/uuid": "^9.0.0",
+		"@types/vscode": "^1.63.0",
+		"@typescript-eslint/eslint-plugin": "^5.30.0",
+		"@typescript-eslint/parser": "^5.30.0",
+		"@vscode/test-electron": "^2.1.5",
+		"@vscode/vsce": "^2.18.0",
+		"eslint": "^8.18.0",
+		"glob": "^8.0.3",
+		"mocha": "^10.0.0",
+		"sql-parser-cst": "^0.36.1",
+		"ts-loader": "^9.3.1",
+		"typescript": "^4.7.4",
+		"webpack": "^5.88.2",
+		"webpack-cli": "^5.1.4"
+	},
+	"dependencies": {
+		"@bstruct/bqsql-parser": "file://.//bqsql_parser/pkg",
+		"@google-cloud/bigquery": "^7.9.3",
+		"@google-cloud/pubsub": "^4.5.0",
+		"@types/gapi.client.bigquery-v2": "^0.0.2",
+		"@vscode/codicons": "^0.0.32",
+		"@vscode/webview-ui-toolkit": "^1.2.2",
+		"csv-writer": "^1.6.0",
+		"jsdom": "^27.4.0",
+		"jspdf": "^2.5.2",
+		"preact": "^10.28.0",
+		"preact-render-to-string": "^6.6.3",
+		"sql-formatter": "^15.6.10",
+		"svg2pdf.js": "^2.7.0"
+	}
+}

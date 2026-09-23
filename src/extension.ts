@@ -1,0 +1,709 @@
+import * as vscode from 'vscode';
+import { Uri, StatusBarItem, ExtensionContext } from 'vscode';
+import { BigqueryAuthenticationWebviewViewProvider } from './activitybar/authenticationWebviewViewProvider';
+import { BigQueryTreeDataProvider } from './activitybar/treeDataProvider';
+import * as commands from './extensionCommands';
+import { WebviewViewProvider } from './tableResultsPanel/webviewViewProvider';
+// import TelemetryReporter from '@vscode/extension-telemetry';
+import { BqsqlCompletionItemProvider } from './language/bqsqlCompletionItemProvider';
+import { BqsqlDocumentSemanticTokensProvider } from './language/bqsqlDocumentSemanticTokensProvider';
+import { BqsqlInlayHintsProvider } from './language/bqsqlInlayHintsProvider';
+import { BqsqlHoverProvider } from './language/bqsqlHoverProvider';
+import { BqsqlFoldingRangeProvider } from './language/bqsqlFoldingRangeProvider';
+import { BqsqlCtePreviewCodeLensProvider } from './language/bqsqlCtePreviewCodeLensProvider';
+import { BqsqlFormattingProvider } from './language/bqsqlFormattingProvider';
+import { BigqueryTableSchemaService } from './services/bigqueryTableSchemaService';
+import { BqsqlDiagnostics } from './language/bqsqlDiagnostics';
+import { QueryResultsSerializer } from './tableResultsPanel/queryResultsSerializer';
+import { QueryResultsMappingService } from './services/queryResultsMappingService';
+import { TableResultsSerializer } from './tableResultsPanel/tableResultsSerializer';
+import { ResultsRender } from './services/resultsRender';
+import { QueryResultsVisualizationType } from './services/queryResultsVisualizationType';
+import { TroubleshootSerializer } from './activitybar/troubleshootSerializer';
+import { GcpAuthenticationTreeDataProvider } from './activitybar/gcpAuthenticationTreeDataProvider';
+import { isBigQueryLanguage } from './services/languageUtils';
+import { QueryHistoryTreeDataProvider } from './activitybar/queryHistoryTreeDataProvider';
+import { JobHistoryTreeDataProvider } from './activitybar/jobHistoryTreeDataProvider';
+import { BqSqlNotebookSerializer, NOTEBOOK_TYPE } from './notebook/bqSqlNotebookSerializer';
+import { BqSqlNotebookController } from './notebook/bqSqlNotebookController';
+import { CellRegistry, runCellRegistryMigration } from './notebook/bqSqlNotebookCellRegistry';
+import { registerNotebookPersistence } from './notebook/bqSqlNotebookPersistence';
+
+export const bigqueryWebviewViewProvider = new WebviewViewProvider();
+export const authenticationWebviewProvider = new BigqueryAuthenticationWebviewViewProvider();
+export const gcpAuthenticationTreeDataProvider = new GcpAuthenticationTreeDataProvider();
+export const bigQueryTreeDataProvider = new BigQueryTreeDataProvider();
+export const bigqueryTableSchemaService = new BigqueryTableSchemaService();
+
+export const QUERY_RESULTS_VIEW_TYPE = "bigquery-query-results";
+export const TABLE_RESULTS_VIEW_TYPE = "bigquery-table-results";
+export const TROUBLESHOOT_VIEW_TYPE = "authentication-troubleshoot";
+
+let statusBarInfo: StatusBarItem | null;
+export function getStatusBarInfo(): StatusBarItem | null {
+	return statusBarInfo;
+}
+
+let extensionUri: Uri;
+export function getExtensionUri(): Uri {
+	return extensionUri;
+}
+
+// let reporter: TelemetryReporter | null;
+// export function getTelemetryReporter(): TelemetryReporter | null {
+// 	return reporter;
+// }
+
+export function activate(context: ExtensionContext) {
+
+	extensionUri = context.extensionUri;
+
+	let queryResultsWebviewMapping: Map<string, ResultsRender> = new Map<string, ResultsRender>();
+
+	// try {
+	// 	//context.extension.id, context.extension.packageJSON.version, 
+	// 	reporter = new TelemetryReporter('10f4da7d-e729-4526-8d9b-92529b10cb32');
+	// 	context.subscriptions.push(reporter);
+
+	// } catch (e) { console.error(e); }
+
+	//statusBarInfo
+	statusBarInfo = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 0);
+	context.subscriptions.push(statusBarInfo);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_RUN_QUERY,
+			commands.commandRunQuery,
+			{
+				"globalState": context.globalState,
+				queryResultsWebviewMapping: queryResultsWebviewMapping
+			}
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_RUN_SELECTED_QUERY,
+			commands.commandRunSelectedQuery,
+			{
+				"globalState": context.globalState,
+				queryResultsWebviewMapping: queryResultsWebviewMapping
+			}
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_PREVIEW_CTE,
+			commands.commandPreviewCte,
+			{
+				"globalState": context.globalState,
+				queryResultsWebviewMapping: queryResultsWebviewMapping
+			}
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_PROFILE_COLUMN,
+			commands.commandProfileColumn,
+			{
+				"globalState": context.globalState,
+				queryResultsWebviewMapping: queryResultsWebviewMapping
+			}
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_PREVIEW_TABLE_AT_CURSOR,
+			commands.commandPreviewTableAtCursor
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_USER_LOGIN,
+			commands.commandUserLogin
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_USER_LOGIN_WITH_DRIVE,
+			commands.commandUserLoginWithDrive
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_USER_LOGIN_NO_LAUNCH_BROWSER,
+			commands.commandUserLoginNoLaunchBrowser
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_SERVICE_ACCOUNT_LOGIN,
+			commands.commandServiceAccountLogin
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_USER_ACTIVATE,
+			commands.commandGcpUserActivate
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_USER_REMOVE,
+			commands.commandGcpUserRemove
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_GCLOUD_INIT,
+			commands.commandGCloudInit
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_VIEW_TABLE,
+			commands.commandViewTable
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_VIEW_TABLE_SCHEMA,
+			commands.commandViewTableSchema
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_CREATE_TABLE_DEFAULT_QUERY,
+			commands.commandCreateTableDefaultQuery
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_OPEN_DDL,
+			commands.commandOpenDdl
+		)
+	);
+
+	//https://code.visualstudio.com/api/references/when-clause-contexts
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_AUTHENTICATION_REFRESH,
+			commands.commandAuthenticationRefresh
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_EXPLORER_REFRESH,
+			commands.commandExplorerRefresh
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_SET_DEFAULT_PROJECT,
+			commands.commandSetDefaultProject
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_DOWNLOAD_CSV,
+			commands.commandDownloadCsv,
+			{ "globalState": context.globalState }
+		),
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_DOWNLOAD_JSONL,
+			commands.commandDownloadJsonl,
+			{ "globalState": context.globalState }
+		),
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_SEND_PUBSUB,
+			commands.commandSendPubsub,
+			{ "globalState": context.globalState }
+		),
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_COPY_CLIPBOARD,
+			commands.commandCopyToClipboard
+		),
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_PROJECT_PIN,
+			commands.commandPinOrUnpinProject
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_PROJECT_HIDE,
+			commands.commandHideProject
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_SHOW_HIDDEN_PROJECTS,
+			commands.commandShowHiddenProjects
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.AUTHENTICATION_TROUBLESHOOT,
+			commands.commandAuthenticationTroubleshoot
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.OPEN_SETTING_PROJECTS,
+			commands.commandOpenSettingProjects
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.OPEN_SETTING_TABLES,
+			commands.commandOpenSettingTables
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_FORMAT_QUERY,
+			commands.commandFormatQuery
+		)
+	);
+
+	// Data Lineage
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_SHOW_LINEAGE,
+			() => commands.commandShowLineage(context)
+		)
+	);
+
+	// Data Lineage for Selection
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_SHOW_LINEAGE_SELECTION,
+			() => commands.commandShowLineageSelection(context)
+		)
+	);
+
+	// Refresh Schema Cache
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_REFRESH_SCHEMA_CACHE,
+			commands.commandRefreshSchemaCache
+		)
+	);
+
+	// Set Lineage Export Theme
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_SET_LINEAGE_EXPORT_THEME,
+			commands.commandSetLineageExportTheme
+		)
+	);
+
+	// Open as Notebook
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_OPEN_AS_NOTEBOOK,
+			commands.commandOpenAsNotebook
+		)
+	);
+
+	// Open as Text (reverse toggle from notebook)
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_OPEN_AS_TEXT,
+			commands.commandOpenAsText
+		)
+	);
+
+	// Revoke Session
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_REVOKE_SESSION,
+			commands.commandRevokeSession
+		)
+	);
+
+	// Pin/Unpin Table
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_PIN_TABLE,
+			commands.commandPinTable
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_UNPIN_TABLE,
+			commands.commandUnpinTable
+		)
+	);
+
+	// Search/Clear Tables
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_SEARCH_TABLES,
+			commands.commandSearchTables
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_CLEAR_SEARCH,
+			commands.commandClearSearch
+		)
+	);
+
+	// Copy Table Path
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_COPY_TABLE_PATH,
+			commands.commandCopyTablePath
+		)
+	);
+
+	// Table Index
+	commands.initTableIndexService(context.globalState);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_BUILD_TABLE_INDEX,
+			commands.commandBuildTableIndex
+		)
+	);
+
+	// Query History
+	const queryHistoryService = commands.initQueryHistoryService(context.globalState);
+	const queryHistoryTreeDataProvider = new QueryHistoryTreeDataProvider(queryHistoryService);
+
+	// Notebook mode: SQL files as notebooks with inline results
+	void runCellRegistryMigration(context.globalState);
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_CLEAR_EXTENSION_CACHE,
+			commands.commandClearExtensionCache(context.globalState)
+		)
+	);
+	const cellRegistry = new CellRegistry(context.globalState);
+
+	context.subscriptions.push(
+		vscode.workspace.registerNotebookSerializer(
+			NOTEBOOK_TYPE,
+			new BqSqlNotebookSerializer(),
+			{ transientOutputs: true }
+		)
+	);
+	const notebookController = new BqSqlNotebookController(cellRegistry, queryHistoryService);
+	context.subscriptions.push(notebookController);
+
+	registerNotebookPersistence(context, cellRegistry);
+
+	context.subscriptions.push(
+		vscode.window.registerTreeDataProvider(
+			'bigquery-query-history',
+			queryHistoryTreeDataProvider
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_HISTORY_RERUN,
+			commands.commandHistoryRerun
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_HISTORY_COPY,
+			commands.commandHistoryCopy
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_HISTORY_SHOW,
+			commands.commandHistoryShow
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_HISTORY_DELETE,
+			commands.commandHistoryDelete
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_HISTORY_CLEAR,
+			commands.commandHistoryClear
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commands.COMMAND_HISTORY_REFRESH,
+			() => queryHistoryTreeDataProvider.refresh()
+		)
+	);
+
+	// Server-side Job History (jobs.list — any client, not just this extension)
+	const jobHistoryTreeDataProvider = new JobHistoryTreeDataProvider();
+	context.subscriptions.push(
+		vscode.window.registerTreeDataProvider('bigquery-job-history', jobHistoryTreeDataProvider),
+		vscode.commands.registerCommand(commands.COMMAND_JOB_HISTORY_SHOW, commands.commandJobHistoryShow),
+		vscode.commands.registerCommand(commands.COMMAND_JOB_HISTORY_OPEN_RESULTS, commands.commandJobHistoryOpenResults),
+		vscode.commands.registerCommand(commands.COMMAND_JOB_HISTORY_REFRESH, () => jobHistoryTreeDataProvider.refresh()),
+		vscode.commands.registerCommand(commands.COMMAND_JOB_HISTORY_TOGGLE_ALL_USERS, () => jobHistoryTreeDataProvider.toggleAllUsers()),
+		vscode.commands.registerCommand(commands.COMMAND_JOB_HISTORY_LOAD_MORE, () => jobHistoryTreeDataProvider.loadMore()),
+		vscode.commands.registerCommand(commands.COMMAND_JOB_HISTORY_DETAILS, commands.commandJobHistoryDetails)
+	);
+
+	// bigquery-authentication
+	context.subscriptions.push(
+		vscode.window.registerWebviewViewProvider(
+			"bigquery-authentication",
+			authenticationWebviewProvider,
+			{ webviewOptions: { retainContextWhenHidden: true } }
+		)
+	);
+	// Tree view alternative (disabled):
+	// context.subscriptions.push(
+	// 	vscode.window.registerTreeDataProvider(
+	// 		'bigquery-authentication',
+	// 		gcpAuthenticationTreeDataProvider
+	// 	)
+	// );
+
+	//bigquery-tree-data-provider
+	context.subscriptions.push(
+		vscode.window.registerTreeDataProvider(
+			'bigquery-tree-data-provider',
+			bigQueryTreeDataProvider
+		)
+	);
+
+	//bigquery-query-results
+	context.subscriptions.push(
+		vscode.window.registerWebviewPanelSerializer(
+			QUERY_RESULTS_VIEW_TYPE,
+			new QueryResultsSerializer(context.globalState, queryResultsWebviewMapping)
+		)
+	);
+
+	//bigquery-table-results
+	context.subscriptions.push(
+		vscode.window.registerWebviewPanelSerializer(
+			TABLE_RESULTS_VIEW_TYPE,
+			new TableResultsSerializer()
+		)
+	);
+
+	//troubleshoot
+	context.subscriptions.push(
+		vscode.window.registerWebviewPanelSerializer(
+			TROUBLESHOOT_VIEW_TYPE,
+			new TroubleshootSerializer()
+		)
+	);
+
+	//language
+	const baseDiagnostics = vscode.languages.createDiagnosticCollection('base_diagnostics');
+	context.subscriptions.push(baseDiagnostics);
+	BqsqlDiagnostics.subscribeToDocumentChanges(context, baseDiagnostics);
+
+	// Register language providers for both bqsql and sql languages
+	const completionProvider = new BqsqlCompletionItemProvider();
+	const semanticTokensProvider = new BqsqlDocumentSemanticTokensProvider();
+	const inlayHintsProvider = new BqsqlInlayHintsProvider();
+
+	context.subscriptions.push(
+		vscode.languages.registerCompletionItemProvider(
+			{ language: 'bqsql' },
+			completionProvider,
+			'.' // Trigger completion when user types '.' for CTE column suggestions
+		)
+	);
+	context.subscriptions.push(
+		vscode.languages.registerCompletionItemProvider(
+			{ language: 'sql' },
+			completionProvider,
+			'.' // Trigger completion when user types '.' for CTE column suggestions
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.languages.registerDocumentSemanticTokensProvider(
+			{ language: 'bqsql' },
+			semanticTokensProvider,
+			BqsqlDocumentSemanticTokensProvider.getSemanticTokensLegend()
+		)
+	);
+	context.subscriptions.push(
+		vscode.languages.registerDocumentSemanticTokensProvider(
+			{ language: 'sql' },
+			semanticTokensProvider,
+			BqsqlDocumentSemanticTokensProvider.getSemanticTokensLegend()
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.languages.registerInlayHintsProvider(
+			{ language: 'bqsql' },
+			inlayHintsProvider
+		)
+	);
+	context.subscriptions.push(
+		vscode.languages.registerInlayHintsProvider(
+			{ language: 'sql' },
+			inlayHintsProvider
+		)
+	);
+
+	// Hover provider for table schema preview
+	const hoverProvider = new BqsqlHoverProvider();
+	context.subscriptions.push(
+		vscode.languages.registerHoverProvider(
+			{ language: 'bqsql' },
+			hoverProvider
+		)
+	);
+	context.subscriptions.push(
+		vscode.languages.registerHoverProvider(
+			{ language: 'sql' },
+			hoverProvider
+		)
+	);
+
+	// Folding range provider for collapsing queries
+	const foldingRangeProvider = new BqsqlFoldingRangeProvider();
+	context.subscriptions.push(
+		vscode.languages.registerFoldingRangeProvider(
+			{ language: 'bqsql' },
+			foldingRangeProvider
+		)
+	);
+	context.subscriptions.push(
+		vscode.languages.registerFoldingRangeProvider(
+			{ language: 'sql' },
+			foldingRangeProvider
+		)
+	);
+
+	// CodeLens provider: "Preview CTE" link above each CTE in a WITH clause
+	const ctePreviewCodeLensProvider = new BqsqlCtePreviewCodeLensProvider();
+	context.subscriptions.push(
+		vscode.languages.registerCodeLensProvider(
+			{ language: 'bqsql' },
+			ctePreviewCodeLensProvider
+		)
+	);
+	context.subscriptions.push(
+		vscode.languages.registerCodeLensProvider(
+			{ language: 'sql' },
+			ctePreviewCodeLensProvider
+		)
+	);
+
+	// Document formatting provider: wires the SQL formatter into VS Code's
+	// standard formatting API (Format Document, context menu, formatOnSave)
+	const formattingProvider = new BqsqlFormattingProvider();
+	context.subscriptions.push(
+		vscode.languages.registerDocumentFormattingEditProvider(
+			{ language: 'bqsql' },
+			formattingProvider
+		)
+	);
+	context.subscriptions.push(
+		vscode.languages.registerDocumentFormattingEditProvider(
+			{ language: 'sql' },
+			formattingProvider
+		)
+	);
+
+	//check if the theme has changed and the tree icons need to change colour
+	vscode.workspace.onDidChangeConfiguration(event => {
+		if (event.affectsConfiguration('workbench.colorTheme')) {
+			vscode.commands.executeCommand(commands.COMMAND_EXPLORER_REFRESH);
+			// reporter?.sendTelemetryEvent('onDidChangeActiveColorTheme', { activeColorThemeKind: vscode.ColorThemeKind[vscode.window.activeColorTheme.kind] });
+		}
+		// Refresh the explorer when its backing settings change from any source
+		// (pin/unpin on another machine via Settings Sync, manual settings.json edits) —
+		// without this the Pinned Tables folder only updates on explicit refresh.
+		if (event.affectsConfiguration(commands.SETTING_PINNED_TABLES)
+			|| event.affectsConfiguration(commands.SETTING_PINNED_PROJECTS)
+			|| event.affectsConfiguration(commands.SETTING_HIDDEN_PROJECTS)
+			|| event.affectsConfiguration(commands.SETTING_PROJECTS)
+			|| event.affectsConfiguration(commands.SETTING_TABLES)) {
+			vscode.commands.executeCommand(commands.COMMAND_EXPLORER_REFRESH);
+		}
+	});
+
+	vscode.window.onDidChangeActiveTextEditor(e => {
+
+		if (e?.document && isBigQueryLanguage(e.document.languageId)) {
+
+			//check if results tab exist and it's known
+			//  is possible that is not know in case that vscode was restarted and that window was not opened
+			//  in this scenario, the tab exists but is not possible to determine the correspondent panel
+			//  panels are lazy loaded
+
+			const config = vscode.workspace.getConfiguration('vscode-bigquery');
+			const autoReveal = config.get('autoRevealResults', true);
+
+			if (autoReveal) {
+				[QueryResultsVisualizationType.table].forEach(t => {
+					const uuid = QueryResultsMappingService.getQueryResultsMappingUuid(context.globalState, e, t);
+					if (uuid) {
+						const resultsGridRender = QueryResultsMappingService.getQueryResultsMappingResultsGridRender(queryResultsWebviewMapping, uuid);
+						if (resultsGridRender) {
+							resultsGridRender.reveal(undefined, true);
+						}
+					}
+				});
+			}
+		}
+
+	});
+
+	// vscode.env.onDidChangeTelemetryEnabled
+
+	// vscode.env.isTelemetryEnabled
+
+}
+
+// this method is called when your extension is deactivated
+export function deactivate() { }
