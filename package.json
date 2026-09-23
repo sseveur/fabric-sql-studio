@@ -112,6 +112,19 @@
 						"title": "Active Connection",
 						"description": "The connection id Ctrl+Enter queries run against. Empty = first connection."
 					},
+					"fabricSql.sparkLakehouse": {
+						"type": "object",
+						"default": {},
+						"scope": "machine-overridable",
+						"order": 7,
+						"title": "Spark Lakehouse",
+						"description": "Lakehouse whose Spark (Livy) session runs 'Run as Spark SQL'. Set it with the 'Fabric SQL: Select Spark Lakehouse' command.",
+						"properties": {
+							"workspaceId": { "type": "string" },
+							"lakehouseId": { "type": "string" },
+							"label": { "type": "string" }
+						}
+					},
 					"fabricSql.maxRows": {
 						"type": "number",
 						"default": 100000,
@@ -471,8 +484,19 @@
 		},
 		"commands": [
 			{
-				"command": "fabricSql.probe-spark",
-				"title": "Test Spark (Livy) Access",
+				"command": "fabricSql.run-spark-query",
+				"title": "Run as Spark SQL",
+				"category": "Fabric SQL",
+				"icon": "$(zap)"
+			},
+			{
+				"command": "fabricSql.stop-spark-session",
+				"title": "Stop Spark Session",
+				"category": "Fabric SQL"
+			},
+			{
+				"command": "fabricSql.select-spark-lakehouse",
+				"title": "Select Spark Lakehouse",
 				"category": "Fabric SQL"
 			},
 			{
@@ -746,6 +770,11 @@
 			],
 			"editor/context": [
 				{
+					"command": "fabricSql.run-spark-query",
+					"group": "1_modification",
+					"when": "editorLangId == fsql || editorLangId == sql"
+				},
+				{
 					"command": "fabricSql.show-lineage-selection",
 					"group": "1_modification",
 					"when": "editorHasSelection && (editorLangId == fsql || editorLangId == sql)"
@@ -913,6 +942,11 @@
 			{
 				"command": "fabricSql.run-query",
 				"key": "Ctrl+Enter",
+				"when": "editorLangId == fsql || editorLangId == sql"
+			},
+			{
+				"command": "fabricSql.run-spark-query",
+				"key": "Ctrl+Shift+Enter",
 				"when": "editorLangId == fsql || editorLangId == sql"
 			},
 			{

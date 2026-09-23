@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { clientFor, disposeAllClients } from './services/sqlServerClient';
+import { clientFor, disposeAllClients, storeResult } from './services/sqlServerClient';
 import { SqlResultMessage, SqlClearMessage, SqlErrorMessage } from './tableResultsPanel/resultContract';
 import { clearSqlDiagnostics, reportSqlError, showQueryStatus } from './language/sqlDiagnostics';
 import { sqlTreeDataProvider, QUERY_RESULTS_VIEW_TYPE, TABLE_RESULTS_VIEW_TYPE, authenticationWebviewProvider, tableSchemaService } from './extension';
@@ -31,11 +31,15 @@ import { showColumnProfilePanel } from './tableResultsPanel/columnProfilePanel';
 import { resolveColumnAtPosition, ResolvedColumn, resolveCteAtPosition, resolveTableAtPosition } from './services/columnResolver';
 import { extractCtePreviews } from './services/ctePreview';
 import { extractLineage } from './services/lineageService';
+import { getSparkTarget, pickSparkTarget, runSparkSql, stopSparkSessions } from './services/sparkClient';
 import { connectionForDatabase } from './services/queryRouter';
 
 export const COMMAND_CLEAR_EXTENSION_CACHE = "fabricSql.clear-extension-cache";
 export const COMMAND_RUN_QUERY = "fabricSql.run-query";
 export const COMMAND_RUN_SELECTED_QUERY = "fabricSql.run-selected-query";
+export const COMMAND_RUN_SPARK_QUERY = "fabricSql.run-spark-query";
+export const COMMAND_STOP_SPARK_SESSION = "fabricSql.stop-spark-session";
+export const COMMAND_SELECT_SPARK_LAKEHOUSE = "fabricSql.select-spark-lakehouse";
 export const COMMAND_PREVIEW_CTE = "fabricSql.preview-cte";
 export const COMMAND_PROFILE_COLUMN = "fabricSql.profile-column";
 export const COMMAND_PREVIEW_TABLE_AT_CURSOR = "fabricSql.preview-table-at-cursor";
@@ -108,6 +112,26 @@ export const commandRunSelectedQuery = async function (this: any, ...args: any[]
 
 	return commandQuery(this, RunQueryType.selectedQuery);
 
+};
+
+/** Selection (or whole editor) as Spark SQL on the chosen lakehouse's Livy session. */
+export const commandRunSparkQuery = async function (this: any, ...args: any[]) {
+	const editor = vscode.window.activeTextEditor;
+	return commandQuery(this, editor && !editor.selection.isEmpty ? RunQueryType.selectedQuery : RunQueryType.query, 'spark');
+};
+
+export const commandStopSparkSession = async function () {
+	const n = await stopSparkSessions();
+	vscode.window.showInformationMessage(n ? 'Spark session stopped.' : 'No Spark session is running.');
+};
+
+export const commandSelectSparkLakehouse = async function () {
+	try {
+		const t = await pickSparkTarget();
+		if (t) { vscode.window.showInformationMessage(`Spark queries will run on ${t.label}.`); }
+	} catch (e: any) {
+		vscode.window.showErrorMessage(`Could not list lakehouses: ${e?.message ?? e}`);
+	}
 };
 
 /**
@@ -238,7 +262,7 @@ enum RunQueryType {
 	selectedQuery = 2
 }
 
-const commandQuery = async function (local: any, queryType: RunQueryType) {
+const commandQuery = async function (local: any, queryType: RunQueryType, engine: 'tds' | 'spark' = 'tds') {
 
 	const t1 = Date.now();
 
@@ -265,12 +289,12 @@ const commandQuery = async function (local: any, queryType: RunQueryType) {
 
 	QueryResultsMappingService.upsertQueryResultsMapping(globalState, uuid, textEditor, QueryResultsVisualizationType.table);
 
-	const numberOfJobs = await runQuery(globalState, queryResultsWebviewMapping, uuid, activeTab.label, queryText, textEditor.document.uri);
+	const numberOfJobs = await runQuery(globalState, queryResultsWebviewMapping, uuid, activeTab.label, queryText, textEditor.document.uri, engine);
 
 
 };
 
-const runQuery = async function (globalState: vscode.Memento, queryResultsWebviewMapping: Map<string, ResultsRender>, uuid: string, mainLabel: string, queryText: string, documentUri?: vscode.Uri): Promise<number> {
+const runQuery = async function (globalState: vscode.Memento, queryResultsWebviewMapping: Map<string, ResultsRender>, uuid: string, mainLabel: string, queryText: string, documentUri?: vscode.Uri, engine: 'tds' | 'spark' = 'tds'): Promise<number> {
 
 	const queryStartTime = Date.now();
 
@@ -310,6 +334,8 @@ const runQuery = async function (globalState: vscode.Memento, queryResultsWebvie
 		});
 	}
 
+	if (engine === 'spark') { return runSparkQuery(resultsGridRender, queryText, queryStartTime); }
+
 	const route = await pickConnectionFor(queryText);
 	if (!route) {
 		warnNoConnection();
@@ -317,6 +343,34 @@ const runQuery = async function (globalState: vscode.Memento, queryResultsWebvie
 	}
 	return runSqlQuery(resultsGridRender, route.conn, queryText, queryStartTime, true, documentUri, route.routed);
 };
+
+async function runSparkQuery(resultsGridRender: ResultsGridRender, queryText: string, queryStartTime: number): Promise<number> {
+	let target = getSparkTarget();
+	if (!target) {
+		try { target = await pickSparkTarget(); } catch (e: any) { vscode.window.showErrorMessage(`Could not list lakehouses: ${e?.message ?? e}`); return 0; }
+		if (!target) { return 0; }
+	}
+	const t = target;
+	await resultsGridRender.postMessage({ requestType: 'clear' } as SqlClearMessage);
+	const maxRows = vscode.workspace.getConfiguration('fabricSql').get<number>('maxRows', 100000);
+	try {
+		const sets = await vscode.window.withProgress(
+			{ location: vscode.ProgressLocation.Notification, title: 'Spark SQL', cancellable: true },
+			(progress, token) => runSparkSql(t, queryText, maxRows, token, message => progress.report({ message })));
+		const result = storeResult(sets, Date.now() - queryStartTime);
+		await resultsGridRender.postMessage({ requestType: 'sql_result', resultId: result.id, sets: result.sets, elapsedMs: result.elapsedMs } as SqlResultMessage);
+		const rows = sets.reduce((n, x) => n + x.rows.length, 0);
+		showQueryStatus(`$(zap) ${rows.toLocaleString()} rows · ${(result.elapsedMs / 1000).toFixed(1)} s · Spark · ${t.label}`, `${sets.length} statement(s) on the Livy session`);
+		await queryHistoryService?.addEntry({ query: queryText, timestamp: queryStartTime, bytesProcessed: 0, durationMs: Date.now() - queryStartTime, projectId: `spark:${t.label}`, status: 'success' });
+		return sets.length;
+	} catch (e: any) {
+		const message = e?.message ?? String(e);
+		showQueryStatus(`$(error) Spark error · ${t.label}`, message);
+		await resultsGridRender.postMessage({ requestType: 'error', error: { message, reason: `Spark · ${t.label}` } } as SqlErrorMessage);
+		await queryHistoryService?.addEntry({ query: queryText, timestamp: queryStartTime, bytesProcessed: 0, durationMs: Date.now() - queryStartTime, projectId: `spark:${t.label}`, status: 'error', errorMessage: message });
+		return 0;
+	}
+}
 
 export const commandUserLogin = async function (...args: any[]) {
 

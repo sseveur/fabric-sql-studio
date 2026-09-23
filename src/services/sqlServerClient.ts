@@ -23,6 +23,17 @@ export type SqlConnectionTarget = Pick<ConnectionRef, 'server' | 'database' | 'p
 const results = new Map<string, QueryResult>();
 const MAX_KEPT_RESULTS = 20;
 
+/** Keep a finished result so the grid can page / export it; oldest evicted past MAX_KEPT_RESULTS. */
+export function storeResult(sets: SqlResultSet[], elapsedMs: number): QueryResult {
+    const result: QueryResult = { id: uuidv4(), sets, elapsedMs };
+    results.set(result.id, result);
+    if (results.size > MAX_KEPT_RESULTS) {
+        const oldest = results.keys().next().value;
+        if (oldest) { results.delete(oldest); }
+    }
+    return result;
+}
+
 export function getResultSet(resultId: string, setIndex: number): SqlResultSet {
     const set = results.get(resultId)?.sets[setIndex];
     if (!set) { throw new Error('Result set is no longer available; re-run the query.'); }
@@ -105,13 +116,7 @@ export class SqlServerClient {
             request.batch(text);
         });
 
-        const result: QueryResult = { id: uuidv4(), sets, elapsedMs: Date.now() - started };
-        results.set(result.id, result);
-        if (results.size > MAX_KEPT_RESULTS) {
-            const oldest = results.keys().next().value;
-            if (oldest) { results.delete(oldest); }
-        }
-        return result;
+        return storeResult(sets, Date.now() - started);
     }
 
     /** Small metadata query: all rows, positional, no cap. */

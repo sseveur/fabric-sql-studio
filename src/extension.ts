@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { commandProbeSpark } from './services/sparkProbe';
+import { stopSparkSessions } from './services/sparkClient';
 import { Uri, StatusBarItem, ExtensionContext } from 'vscode';
 import { AuthenticationWebviewViewProvider } from './activitybar/authenticationWebviewViewProvider';
 import { SqlTreeDataProvider } from './activitybar/sqlTreeDataProvider';
@@ -117,7 +117,14 @@ export function activate(context: ExtensionContext) {
 			commands.commandAuthTokenInfo
 		)
 	);
-	context.subscriptions.push(vscode.commands.registerCommand('fabricSql.probe-spark', commandProbeSpark));
+	context.subscriptions.push(
+		vscode.commands.registerCommand(commands.COMMAND_RUN_SPARK_QUERY, commands.commandRunSparkQuery,
+			{ "globalState": context.globalState, queryResultsWebviewMapping: queryResultsWebviewMapping }),
+		vscode.commands.registerCommand(commands.COMMAND_STOP_SPARK_SESSION, commands.commandStopSparkSession),
+		vscode.commands.registerCommand(commands.COMMAND_SELECT_SPARK_LAKEHOUSE, commands.commandSelectSparkLakehouse),
+		// Best effort: don't leave a Spark session burning capacity after the window closes.
+		{ dispose: () => { void stopSparkSessions(); } },
+	);
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
