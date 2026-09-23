@@ -1,6 +1,4 @@
-<img src="images/logo-mark.png" alt="Fabric SQL Studio logo" width="112">
-
-# Fabric SQL Studio
+<img src="images/logo-banner.png" alt="Fabric SQL Studio" width="360">
 
 [![Marketplace](https://img.shields.io/visual-studio-marketplace/v/s-seveur.fabric-sql-studio)](https://marketplace.visualstudio.com/items?itemName=s-seveur.fabric-sql-studio) [![Installs](https://img.shields.io/visual-studio-marketplace/i/s-seveur.fabric-sql-studio)](https://marketplace.visualstudio.com/items?itemName=s-seveur.fabric-sql-studio) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
