@@ -97,4 +97,43 @@ suite('lineage layout', () => {
         b.forEach(g => calculateLayout(g));
         assert.deepStrictEqual(a.map(g => g.nodes.map(n => [n.id, n.x, n.y])), b.map(g => g.nodes.map(n => [n.id, n.x, n.y])));
     });
+
+    test('clicking a box goes to its line in the document, for the whole file and for a selection', () => {
+        const file = fs.readFileSync(path.join(__dirname, '../../../tests/lineage_samples.fsql'), 'utf8');
+        const lines = file.split('\n');
+        const lineOf = (re: RegExp) => lines.findIndex(l => re.test(l)) + 1;
+        const expected: Array<[string, NodeType, number]> = [
+            ['customers', 'CTE', lineOf(/^WITH customers AS/)],
+            ['enriched', 'CTE', lineOf(/^enriched AS/)],
+            ['final', 'CTE', lineOf(/^final AS/)],
+            ['customer_risk', 'TARGET', lineOf(/^INSERT INTO mart\.customer_risk/)],
+            ['flags', 'SOURCE', lineOf(/JOIN audit\.flags/)],
+        ];
+        const check = (g: LineageGraph) => {
+            for (const [name, type, line] of expected) {
+                const key = `${name}:${type}`;
+                const node = g.nodes.find(n => n.name === name && n.nodeType === type)!;
+                assert.strictEqual(node.sourceLine, line, `${key}`);
+                // Column points at the (possibly schema-qualified) name
+                const token = /^[\w.\[\]]+/.exec(lines[line - 1].slice(node.sourceColumn! - 1))?.[0].toLowerCase() ?? '';
+                assert.ok(token === name || token.endsWith('.' + name), `${key} column: ${token}`);
+            }
+        };
+
+        // Whole file: query 4 is the one with the INSERT
+        check(buildMultiQueryLineage(file).queries.find(q => q.graph.nodes.some(n => n.nodeType === 'TARGET'))!.graph);
+
+        // "Show Lineage (Selection)" on just that query, selected from the start of its WITH line
+        const from = expected[0][2];
+        const to = lineOf(/^SELECT customer_id, region, segment, score, flag, country FROM final;/);
+        const selection = lines.slice(from - 1, to).join('\n');
+        const q = buildMultiQueryLineage(selection, { line: from, column: 1 }).queries[0];
+        check(q.graph);
+        assert.strictEqual(q.startLine, from);
+
+        // Selection starting mid-line: first-line columns shift too
+        const indented = buildMultiQueryLineage('SELECT * FROM dbo.t', { line: 7, column: 5 }).queries[0].graph.nodes.find(n => n.nodeType === 'SOURCE')!;
+        assert.deepStrictEqual([indented.sourceLine, indented.sourceColumn], [7, 5 + 'SELECT * FROM '.length]);
+    });
 });
+

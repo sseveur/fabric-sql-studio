@@ -117,7 +117,10 @@ export function buildLineageGraph(sql: string): LineageGraph {
             name: cte.name,
             fullName: cte.name,
             nodeType: 'CTE',
-            layer
+            layer,
+            // Click-to-navigate lands on the CTE's name (parser ranges are 0-based)
+            sourceLine: cte.range.length ? cte.range[0] + 1 : undefined,
+            sourceColumn: cte.range.length ? cte.range[1] + 1 : undefined
         };
         nodes.push(node);
         nodeMap.set(cte.name.toLowerCase(), node);
@@ -465,7 +468,12 @@ export interface MultiLineageResult {
 /**
  * Build lineage graphs for multiple queries in a SQL document
  */
-export function buildMultiQueryLineage(fullSql: string): MultiLineageResult {
+/**
+ * `origin` is where `fullSql` starts in the document (1-based line / column), for text that is
+ * only part of it, e.g. the selection. Node lines, and columns on that first line, are shifted
+ * so click-to-navigate lands in the document, not in the snippet.
+ */
+export function buildMultiQueryLineage(fullSql: string, origin: { line: number; column: number } = { line: 1, column: 1 }): MultiLineageResult {
     const splitResults = splitQueries(fullSql);
     const queries: QueryLineageInfo[] = [];
 
@@ -479,15 +487,18 @@ export function buildMultiQueryLineage(fullSql: string): MultiLineageResult {
             const lineOffset = split.startLine - 1;
             for (const node of graph.nodes) {
                 if (node.sourceLine !== undefined) {
-                    node.sourceLine += lineOffset;
+                    if (node.sourceLine + lineOffset === 1 && node.sourceColumn !== undefined) {
+                        node.sourceColumn += origin.column - 1;
+                    }
+                    node.sourceLine += lineOffset + origin.line - 1;
                 }
             }
 
             queries.push({
                 graph,
                 queryIndex: i,
-                startLine: split.startLine,
-                endLine: split.endLine,
+                startLine: split.startLine + origin.line - 1,
+                endLine: split.endLine + origin.line - 1,
                 sqlText: split.sql
             });
         } catch {
