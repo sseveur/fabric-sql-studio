@@ -12,9 +12,8 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 
-# Root-level .txt notes/scraps must never ship; LICENSE.txt is re-included below.
+# Root-level .txt notes/scraps must never ship (LICENSE has no extension).
 /*.txt
-!LICENSE.txt
 
 # Development files
 claude-transcript/**
@@ -26,11 +25,15 @@ commands.txt
 .claude/**
 .github/**
 
-# Design sources / history
+# Design sources / docs / history — not needed in the VSIX
 logo.psd
 previous_packages/**
 new_features/**
+documentation/**
 call.txt
-documentation/Untitled.png
 # Manual test queries
 tests/**
+
+# Lockfile and CI
+package-lock.json
+.gitattributes

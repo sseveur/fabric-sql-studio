@@ -2,9 +2,10 @@
 	"name": "fabric-sql-studio",
 	"displayName": "Fabric SQL Studio",
 	"description": "Microsoft Fabric Warehouse / Lakehouse and SQL Server in VS Code: browse workspaces and catalogs, run T-SQL over TDS with Entra sign-in, results grid with charts and exports, notebooks, formatter, intellisense, estimated plans, query history and data lineage.",
-	"version": "3.0.0",
+	"version": "1.0.0",
 	"publisher": "s-seveur",
 	"icon": "logo.png",
+	"license": "MIT",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/sseveur/fabric-sql-studio.git"
@@ -17,8 +18,29 @@
 		"vscode": "^1.82.0"
 	},
 	"categories": [
+		"Data Science",
+		"Programming Languages",
+		"Notebooks",
+		"Visualization",
 		"Other"
 	],
+	"keywords": [
+		"fabric",
+		"microsoft fabric",
+		"sql",
+		"t-sql",
+		"warehouse",
+		"lakehouse",
+		"azure sql",
+		"sql server",
+		"spark",
+		"notebook"
+	],
+	"galleryBanner": {
+		"color": "#1F1F1F",
+		"theme": "dark"
+	},
+	"qna": "marketplace",
 	"activationEvents": [
 		"onView:fabric-sql-main-activity-bar",
 		"onWebviewPanel:fabric-sql-query-results",

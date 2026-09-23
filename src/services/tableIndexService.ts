@@ -8,7 +8,7 @@ interface TableIndexData {
     builtAt: number;
 }
 
-const STORAGE_KEY = 'bigquery-table-index';
+const STORAGE_KEY = 'fabric-sql-table-index';
 
 /** Local index of every table/view across all connections, for the explorer's search mode. */
 export class TableIndexService {

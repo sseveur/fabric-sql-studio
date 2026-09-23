@@ -8,7 +8,6 @@ import { getActiveConnection, getConnection, getConnections, pinObject, setActiv
 import { listSqlItems, listWorkspaces } from './services/fabricClient';
 import { pickConnectionFor } from './services/queryRouter';
 import { ConnectionRef, ObjectRef, displayName, qualifiedName, refToKey } from './services/objectRef';
-import { SchemaRender } from './tableResultsPanel/schemaRender';
 import { QueryGeneratorService } from './services/queryGeneratorService';
 import { ResultsGridRender } from './tableResultsPanel/resultsGridRender';
 import { randomUUID as uuidv4 } from 'crypto';
@@ -1076,11 +1075,10 @@ export const commandCopyTablePath = async function (...args: any[]) {
  * Falls back to a known-keys list when Memento.keys() is empty/unsupported.
  */
 const KNOWN_GLOBAL_STATE_KEYS = [
-	'bqsql-notebook-cells',
-	'bigquery-table-index',
+	'fabric-sql-table-index',
 	'queryResultsMapping',
 	'queryResultsChartMapping',
-	'bigquery-query-history',
+	'fabric-sql-query-history',
 ];
 
 export const commandClearExtensionCache = function (globalState: vscode.Memento) {

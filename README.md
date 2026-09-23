@@ -1,8 +1,8 @@
 # Fabric SQL Studio for Visual Studio Code
 
-Query Microsoft Fabric Warehouses, Lakehouse SQL endpoints, Azure SQL and SQL Server from VS Code. Browse workspaces and catalogs, run T-SQL with your Microsoft account, and work with the results in a grid, charts, notebooks and lineage graphs.
+[![Marketplace](https://img.shields.io/visual-studio-marketplace/v/s-seveur.fabric-sql-studio)](https://marketplace.visualstudio.com/items?itemName=s-seveur.fabric-sql-studio) [![Installs](https://img.shields.io/visual-studio-marketplace/i/s-seveur.fabric-sql-studio)](https://marketplace.visualstudio.com/items?itemName=s-seveur.fabric-sql-studio) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Formerly *BigQuery Studio* (a fork of bstruct/vscode-bigquery); version 3 retargets the whole extension at TDS endpoints and drops BigQuery.
+Query Microsoft Fabric Warehouses, Lakehouse SQL endpoints, Azure SQL and SQL Server from VS Code. Browse workspaces and catalogs, run T-SQL with your Microsoft account, and work with the results in a grid, charts, notebooks and lineage graphs.
 
 ## Features
 
@@ -10,6 +10,7 @@ Formerly *BigQuery Studio* (a fork of bstruct/vscode-bigquery); version 3 retarg
 - **Connections** - Named profiles for Fabric Warehouse / Lakehouse SQL endpoints, Azure SQL and SQL Server. `+` on the explorer picks a Fabric workspace and item from the REST API and writes the profile for you.
 - **Explorer** - Connection → database → schema → tables, views, routines from the catalog views. Preview (TOP 100), schema, create query, open definition, copy `[db].[schema].[name]`, pin, search across connections.
 - **Run T-SQL** - `Ctrl+Enter` runs the editor (or selection, `Ctrl+E` runs the block under the cursor). A query naming another database in the same or another workspace is routed to the profile that owns it. Multi-statement batches show one grid per result set; DML shows affected rows. Errors land as diagnostics on the reported line.
+- **Spark SQL** - `Ctrl+Shift+Enter` runs the selection on a Livy session for the lakehouse you pick with **Select Spark Lakehouse**. The session is reused across runs, its state shows in the Spark sidebar section and the status bar, and **Stop Spark Session** tears it down.
 - **Results grid** - Sort, find, schema tab, cell drawer, row selection copy, density, per-type colours, charts. Export CSV / JSONL / clipboard.
 - **Notebooks** - Open a `.sql` / `.fsql` file as a notebook: per-cell run, cancel, load-more paging and exports.
 - **Language services** - T-SQL completion (keywords, functions, `alias.` columns from `INFORMATION_SCHEMA`), hover schema, semantic tokens, folding, snippets, formatter (`sql-formatter` transactsql dialect with style options).
@@ -34,6 +35,7 @@ Formerly *BigQuery Studio* (a fork of bstruct/vscode-bigquery); version 3 retarg
 ```
 
 3. Open a `.sql` or `.fsql` file and press `Ctrl+Enter`.
+4. For Spark: run **Fabric SQL: Select Spark Lakehouse**, then `Ctrl+Shift+Enter`.
 
 ## Settings
 
@@ -48,6 +50,7 @@ All settings live under `fabricSql.*`. The most useful ones:
 | `format*` | Formatter style (keyword case, indent style, leading commas, expression width, ...) |
 | `gridColors` | Per-type cell colours in the grid |
 | `clipboardSizeLimitKb` | Cap for "Copy all" |
+| `sparkLakehouse` | Workspace and lakehouse Spark SQL runs against |
 
 ## Requirements
 
@@ -66,6 +69,10 @@ npm run lint
 
 `F5` opens the Extension Development Host on the `tests/` folder, which holds read-only smoke queries.
 
+## Credits
+
+Formerly *BigQuery Studio*, itself a fork of [bstruct/vscode-bigquery](https://github.com/bstruct/vscode-bigquery). The extension has since been retargeted at Fabric and TDS endpoints; no BigQuery code remains.
+
 ## License
 
-MIT
+[MIT](LICENSE)

@@ -11,7 +11,7 @@ export interface QueryHistoryItem {
     errorMessage?: string;
 }
 
-const STORAGE_KEY = 'bigquery-query-history';
+const STORAGE_KEY = 'fabric-sql-query-history';
 const MAX_HISTORY_ITEMS = 100;
 
 export class QueryHistoryService {

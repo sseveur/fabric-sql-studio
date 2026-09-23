@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { ResultsGridRender } from '../tableResultsPanel/resultsGridRender';
-import { ResultsGridRenderRequest } from '../tableResultsPanel/resultsGridRenderRequest';
 import { QueryResultsMapping } from './queryResultsMapping';
 import { QueryResultsVisualizationType } from './queryResultsVisualizationType';
 import { ResultsRender } from './resultsRender';
@@ -59,21 +58,6 @@ export class QueryResultsMappingService {
         }
 
         globalState.update('queryResultsMapping', queryResultsMapping);
-
-    };
-
-    public static async updateQueryResultsMapping(globalState: vscode.Memento, uuid: string, request: ResultsGridRenderRequest) {
-
-        let queryResultsMapping: QueryResultsMapping[] | undefined = globalState.get('queryResultsMapping');
-        if (queryResultsMapping) {
-
-            const item = queryResultsMapping.find(c => c.uuid === uuid);
-            if (item) {
-                item.jobReferences = request.jobReferences;
-                item.jobIndex = request.jobIndex;
-                globalState.update('queryResultsMapping', queryResultsMapping);
-            }
-        }
 
     };
 
