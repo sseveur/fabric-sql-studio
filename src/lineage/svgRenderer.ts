@@ -1,12 +1,13 @@
 import { LineageGraph, LineageNode, LineageEdge, NodeType } from "../services/lineageGraph";
 import { LayoutConfig, getLayoutConfig } from "./dagLayout";
+import { typeKind } from "./columnTypes";
 
 /**
  * Accent per node type: used only for the badge, the hover outline and the legend, so the
  * cards themselves stay neutral. Mid-tone hues that read on both dark and light themes.
  */
 /* eslint-disable @typescript-eslint/naming-convention */
-const NODE_COLORS: Record<NodeType, string> = {
+export const NODE_COLORS: Record<NodeType, string> = {
     'SOURCE': '#3b9eff',    // blue
     'CTE': '#a371f7',       // violet
     'TARGET': '#3fb950',    // green
@@ -14,7 +15,7 @@ const NODE_COLORS: Record<NodeType, string> = {
 };
 
 /** Short tag under the badge icon, dbt style. */
-const NODE_TAGS: Record<NodeType, string> = {
+export const NODE_TAGS: Record<NodeType, string> = {
     'SOURCE': 'SRC',
     'CTE': 'CTE',
     'TARGET': 'TGT',
@@ -48,15 +49,9 @@ export function columnsCardHeight(node: LineageNode, headerHeight: number): numb
     return rows ? headerHeight + COLUMN_PAD * 2 + rows * COLUMN_ROW : headerHeight;
 }
 
-/** Tiny type glyph for a column row, Unity Catalog style; `?` when the type is unknown. */
+/** Tiny type glyph for a column row, Unity Catalog style; a dot when the type is unknown. */
 function typeGlyph(type?: string): string {
-    const t = (type ?? '').toLowerCase();
-    if (!t) { return '\u00b7'; }
-    if (/^(bit|bool)/.test(t)) { return '\u2713'; }
-    if (/(int|decimal|numeric|float|real|money|double|long|short|byte)/.test(t)) { return '#'; }
-    if (/(date|time)/.test(t)) { return '\u25f7'; }
-    if (/(char|text|string|xml|uniqueidentifier|sysname)/.test(t)) { return 'Aa'; }
-    return '{}';
+    return { number: '#', text: 'Aa', date: '\u25f7', bool: '\u2713', other: '{}', unknown: '\u00b7' }[typeKind(type)];
 }
 
 /**

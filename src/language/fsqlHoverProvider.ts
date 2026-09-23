@@ -4,7 +4,11 @@ import { FsqlDocument, FsqlDocumentItem } from "./fsqlDocument";
 import { isFabricSqlLanguage } from "../services/languageUtils";
 import { tableSchemaService } from "../extension";
 import { TableSchemaColumn } from "../services/tableSchemaColumn";
-import { extractCteColumns, getCteNames, CteColumn } from "../services/cteExtractor";
+import { extractCteColumns, getCteNames } from "../services/cteExtractor";
+import { HoverCard, renderHoverCard } from "./hoverCards";
+import { buildMultiQueryLineage } from "../services/lineageGraph";
+import { resolveLineageColumns } from "../lineage/lineageColumns";
+import { getActiveConnection } from "../services/connections";
 
 export class FsqlHoverProvider implements HoverProvider {
 
@@ -27,8 +31,7 @@ export class FsqlHoverProvider implements HoverProvider {
             // Verify it's actually a CTE defined in this query
             const definedCtes = getCteNames(documentContent);
             if (definedCtes.some(name => name.toLowerCase() === cteName.toLowerCase())) {
-                const columns = extractCteColumns(documentContent, cteName);
-                return new Hover(this.formatCteAsMarkdown(cteName, columns));
+                return this.cteHover(documentContent, cteName, position.line + 1).then(card => new Hover(toMarkdown(card)));
             }
         }
 
@@ -41,10 +44,11 @@ export class FsqlHoverProvider implements HoverProvider {
             // Show a loading message with the table name
             const tableName = this.extractTableName(documentContent, tableIdentifier);
             if (tableName) {
-                const loadingMd = new MarkdownString();
-                loadingMd.appendMarkdown(`**\`${tableName}\`**\n\n`);
-                loadingMd.appendMarkdown(`*Loading schema... hover again to see columns*`);
-                return new Hover(loadingMd);
+                const parts = tableName.split('.');
+                return new Hover(toMarkdown({
+                    kind: 'SOURCE', name: parts[parts.length - 1], subtitle: parts.slice(0, -1).join('.') || undefined,
+                    columns: [], note: 'Loading columns\u2026 hover again in a moment',
+                }));
             }
             return null;
         }
@@ -151,40 +155,15 @@ export class FsqlHoverProvider implements HoverProvider {
     }
 
     private formatSchemaAsMarkdown(schema: TableSchemaColumn[]): MarkdownString {
-        if (schema.length === 0) {
-            return new MarkdownString("No schema information available");
-        }
-
-        const firstColumn = schema[0];
-        const tableName = `${firstColumn.project_id}.${firstColumn.dataset_name}.${firstColumn.table_name}`;
-
-        let md = `**\`${tableName}\`**\n\n`;
-        md += `| Column | Type | Description |\n`;
-        md += `|--------|------|-------------|\n`;
-
-        // Sort by ordinal position
-        const sortedSchema = [...schema].sort((a, b) =>
-            parseInt(a.ordinal_position) - parseInt(b.ordinal_position)
-        );
-
-        for (const col of sortedSchema) {
-            const description = col.description || '';
-            const escapedDesc = description.replace(/\|/g, '\\|').replace(/\n/g, ' ');
-            md += `| ${col.column_name} | \`${col.data_type}\` | ${escapedDesc} |\n`;
-        }
-
-        // Add footer with column count and partition info
-        const partitionCols = schema.filter(c => c.is_partitioning_column === 'YES');
-        let footer = `\n*${schema.length} column${schema.length !== 1 ? 's' : ''}`;
-        if (partitionCols.length > 0) {
-            footer += ` • Partitioned by: ${partitionCols.map(c => c.column_name).join(', ')}`;
-        }
-        footer += '*';
-        md += footer;
-
-        const markdown = new MarkdownString(md);
-        markdown.isTrusted = true;
-        return markdown;
+        const first = schema[0];
+        return toMarkdown({
+            kind: 'SOURCE',
+            name: first.table_name,
+            subtitle: `${first.project_id}.${first.dataset_name}`,
+            columns: [...schema]
+                .sort((a, b) => Number(a.ordinal_position) - Number(b.ordinal_position))
+                .map(c => ({ name: c.column_name, type: c.data_type })),
+        });
     }
 
     /**
@@ -209,26 +188,32 @@ export class FsqlHoverProvider implements HoverProvider {
     }
 
     /**
-     * Format CTE columns as markdown for hover display
+     * CTE columns as the lineage Columns view resolves them: SELECT-list names, `*` expanded, and
+     * types carried over from tables whose schema is already cached (never waits on the server).
      */
-    private formatCteAsMarkdown(cteName: string, columns: CteColumn[]): MarkdownString {
-        let md = `**CTE: \`${cteName}\`**\n\n`;
-
-        if (columns.length === 0) {
-            md += `*No columns detected*`;
-        } else {
-            md += `| Column |\n`;
-            md += `|--------|\n`;
-
-            for (const col of columns) {
-                md += `| ${col.name} |\n`;
+    private async cteHover(sql: string, cteName: string, line: number): Promise<HoverCard> {
+        const card: HoverCard = { kind: 'CTE', name: cteName, columns: extractCteColumns(sql, cteName) };
+        try {
+            const query = buildMultiQueryLineage(sql).queries.find(q => line >= q.startLine && line <= q.endLine);
+            const node = query?.graph.nodes.find(n => n.nodeType === 'CTE' && n.name.toLowerCase() === cteName.toLowerCase());
+            if (query && node) {
+                const cached = async (t: { database: string; schema: string; table: string }) =>
+                    tableSchemaService.getCachedColumns(t.database, t.schema, t.table);
+                await resolveLineageColumns(query.graph, query.sqlText, cached, getActiveConnection()?.database);
+                if (node.columns?.length) { card.columns = node.columns; }
+                if (node.sourceLine) { card.subtitle = `line ${node.sourceLine}`; }
             }
-
-            md += `\n*${columns.length} column${columns.length !== 1 ? 's' : ''}*`;
-        }
-
-        const markdown = new MarkdownString(md);
-        markdown.isTrusted = true;
-        return markdown;
+        } catch { /* names from the SELECT list are still worth showing */ }
+        return card;
     }
+
 }
+
+function toMarkdown(card: HoverCard): MarkdownString {
+    const md = new MarkdownString(renderHoverCard(card));
+    md.supportHtml = true;
+    md.supportThemeIcons = true;
+    md.isTrusted = false;
+    return md;
+}
+

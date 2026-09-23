@@ -79,6 +79,15 @@ export class TableSchemaService {
         return [database, schema, name];
     }
 
+    /** Columns of a table already in the cache, without querying; empty when it is not cached. */
+    public getCachedColumns(database: string, schema: string, name: string): Array<{ name: string; type: string }> {
+        const key = this.key(database, schema, name);
+        return this.schemas
+            .filter(s => this.key(s.project_id, s.dataset_name, s.table_name) === key)
+            .sort((a, b) => Number(a.ordinal_position) - Number(b.ordinal_position))
+            .map(s => ({ name: s.column_name, type: s.data_type }));
+    }
+
     private key(database: string, schema: string, name: string): string {
         return `${database}.${schema}.${name}`.toLowerCase();
     }
