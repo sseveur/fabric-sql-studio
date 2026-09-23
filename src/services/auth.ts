@@ -132,6 +132,7 @@ export function describeToken(info: TokenInfo): Record<string, string> {
         audience: String(c.aud ?? '(unknown)'),
         tenant: String(c.tid ?? '(unknown)'),
         expires: new Date(info.expiresOn).toISOString(),
+        scopes: String(c.scp ?? c.roles ?? '(none)'),
     };
 }
 

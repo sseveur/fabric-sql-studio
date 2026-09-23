@@ -471,6 +471,11 @@
 		},
 		"commands": [
 			{
+				"command": "fabricSql.probe-spark",
+				"title": "Test Spark (Livy) Access",
+				"category": "Fabric SQL"
+			},
+			{
 				"command": "fabricSql.run-query",
 				"title": "Fabric SQL: Run Query",
 				"icon": "$(debug-start)"

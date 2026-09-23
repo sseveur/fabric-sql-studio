@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { commandProbeSpark } from './services/sparkProbe';
 import { Uri, StatusBarItem, ExtensionContext } from 'vscode';
 import { AuthenticationWebviewViewProvider } from './activitybar/authenticationWebviewViewProvider';
 import { SqlTreeDataProvider } from './activitybar/sqlTreeDataProvider';
@@ -116,6 +117,7 @@ export function activate(context: ExtensionContext) {
 			commands.commandAuthTokenInfo
 		)
 	);
+	context.subscriptions.push(vscode.commands.registerCommand('fabricSql.probe-spark', commandProbeSpark));
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
