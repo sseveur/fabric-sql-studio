@@ -12,7 +12,15 @@
  */
 const nodeModule = require('module');
 
+class StubEventEmitter {
+    private listeners: Array<(e: unknown) => void> = [];
+    event = (l: (e: unknown) => void) => { this.listeners.push(l); return { dispose: () => { this.listeners = this.listeners.filter(x => x !== l); } }; };
+    fire(e?: unknown) { this.listeners.forEach(l => l(e)); }
+    dispose() { this.listeners = []; }
+}
+
 const vscodeStub = {
+    EventEmitter: StubEventEmitter,
     workspace: {
         getConfiguration: () => ({
             get: (_key: string, def: unknown) => def,
