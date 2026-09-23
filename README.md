@@ -4,7 +4,7 @@
 
 Write and run T-SQL against Microsoft Fabric from VS Code. Sign in with your Microsoft account, pick a warehouse, lakehouse SQL endpoint or SQL database from your workspace, and query it. Azure SQL and SQL Server work the same way, and lakehouses can also be queried with Spark SQL.
 
-<!-- screenshot: images/results-grid.png (a query with its result grid open underneath) -->
+![Query results in the grid: paging, find, typed columns and export buttons](images/results-grid.png)
 
 ## Connect
 
@@ -12,7 +12,7 @@ Write and run T-SQL against Microsoft Fabric from VS Code. Sign in with your Mic
 - **Add a Fabric connection in two clicks.** The `+` button in the explorer lists your workspaces, then the warehouses, lakehouse endpoints and SQL databases in the one you pick.
 - **Queries go to the right place.** If a query names a database that lives on another connection, it runs there, and your active connection stays as it is.
 
-<!-- screenshot: images/explorer.png (explorer tree: connection > database > schema > tables) -->
+<img src="images/explorer.png" alt="The Fabric SQL sidebar: sign-in, explorer, Spark session, query history and job history" width="300">
 
 The explorer shows each connection's databases, schemas, tables, views and routines. From any table you can preview the top 100 rows, see its schema, open a view's or procedure's definition, copy its full name, or pin it to the top.
 
@@ -54,7 +54,7 @@ Switch on **Columns** above the graph to list the columns of every table, CTE an
 - Formatting through `sql-formatter`'s T-SQL dialect, with options for keyword case, indentation and comma position.
 - Syntax highlighting, folding and snippets.
 
-<!-- screenshot: images/hover.png (hovering a table name) -->
+<img src="images/table-hover.png" alt="Hovering a table shows its schema and columns with their types" width="440">
 
 ## History
 
