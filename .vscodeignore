@@ -30,6 +30,8 @@ logo.psd
 previous_packages/**
 new_features/**
 documentation/**
+# README screenshots: the Marketplace loads them from the repository
+images/**
 call.txt
 # Manual test queries
 tests/**
