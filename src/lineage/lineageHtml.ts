@@ -41,11 +41,18 @@ export function escapeHtml(text: string): string {
         .replace(/'/g, '&#039;');
 }
 
+/** Per-render webview values: the CSP, its script nonce, and the webview URI of codicon.ttf. */
+export interface LineagePage {
+    csp: string;
+    nonce: string;
+    codiconFontUri: string;
+}
+
 /**
  * Full webview page for the lineage panel: one collapsible section per query with lineage.
  * `exportTheme` is the fabricSql.lineageExportTheme value the PNG/PDF export starts with.
  */
-export function renderLineageHtml(sections: LineageSection[], exportTheme: string): string {
+export function renderLineageHtml(sections: LineageSection[], exportTheme: string, page: LineagePage): string {
     const styles = getGraphStyles();
     const legend = renderLegend();
 
@@ -57,12 +64,13 @@ export function renderLineageHtml(sections: LineageSection[], exportTheme: strin
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="${escapeHtml(page.csp)}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Data Lineage</title>
     <style>
         @font-face {
             font-family: 'codicon';
-            src: url('https://microsoft.github.io/vscode-codicons/dist/codicon.ttf') format('truetype');
+            src: url('${escapeHtml(page.codiconFontUri)}') format('truetype');
         }
         .codicon {
             font-family: 'codicon';
@@ -366,9 +374,13 @@ export function renderLineageHtml(sections: LineageSection[], exportTheme: strin
         ${querySections}
     </div>
 
-    <script>
+    <script nonce="${escapeHtml(page.nonce)}">
         (function() {
             const vscode = acquireVsCodeApi();
+
+            document.addEventListener('securitypolicyviolation', function(e) {
+                vscode.postMessage({ type: 'cspViolation', directive: e.effectiveDirective, blocked: e.blockedURI });
+            });
 
             // Export theme from extension settings
             var exportTheme = ${jsString(exportTheme)};

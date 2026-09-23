@@ -1,61 +1,61 @@
-import path = require("path");
+import * as vscode from "vscode";
 import { getExtensionUri } from "./extension";
 
 export class Icons {
 
-    public fabricSql: { light: string; dark: string } = {
-        light: path.join(getExtensionUri().path, 'resources', 'light', 'fabric-sql.svg'),
-        dark: path.join(getExtensionUri().path, 'resources', 'dark', 'fabric-sql.svg')
+    public fabricSql: { light: vscode.Uri; dark: vscode.Uri } = {
+        light: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'light', 'fabric-sql.svg'),
+        dark: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'dark', 'fabric-sql.svg')
     };
 
-    public datasetLink: { light: string; dark: string } = {
-        light: path.join(getExtensionUri().path, 'resources', 'light', 'dataset-link.svg'),
-        dark: path.join(getExtensionUri().path, 'resources', 'dark', 'dataset-link.svg')
+    public datasetLink: { light: vscode.Uri; dark: vscode.Uri } = {
+        light: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'light', 'dataset-link.svg'),
+        dark: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'dark', 'dataset-link.svg')
     };
 
-    public dataset: { light: string; dark: string } = {
-        light: path.join(getExtensionUri().path, 'resources', 'light', 'dataset.svg'),
-        dark: path.join(getExtensionUri().path, 'resources', 'dark', 'dataset.svg')
+    public dataset: { light: vscode.Uri; dark: vscode.Uri } = {
+        light: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'light', 'dataset.svg'),
+        dark: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'dark', 'dataset.svg')
     };
 
-    public group: { light: string; dark: string } = {
-        light: path.join(getExtensionUri().path, 'resources', 'light', 'group.svg'),
-        dark: path.join(getExtensionUri().path, 'resources', 'dark', 'group.svg')
+    public group: { light: vscode.Uri; dark: vscode.Uri } = {
+        light: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'light', 'group.svg'),
+        dark: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'dark', 'group.svg')
     };
 
-    public model: { light: string; dark: string } = {
-        light: path.join(getExtensionUri().path, 'resources', 'light', 'model.svg'),
-        dark: path.join(getExtensionUri().path, 'resources', 'dark', 'model.svg')
+    public model: { light: vscode.Uri; dark: vscode.Uri } = {
+        light: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'light', 'model.svg'),
+        dark: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'dark', 'model.svg')
     };
 
-    public person: { light: string; dark: string } = {
-        light: path.join(getExtensionUri().path, 'resources', 'light', 'person.svg'),
-        dark: path.join(getExtensionUri().path, 'resources', 'dark', 'person.svg')
+    public person: { light: vscode.Uri; dark: vscode.Uri } = {
+        light: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'light', 'person.svg'),
+        dark: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'dark', 'person.svg')
     };
 
-    public routine: { light: string; dark: string } = {
-        light: path.join(getExtensionUri().path, 'resources', 'light', 'routine.svg'),
-        dark: path.join(getExtensionUri().path, 'resources', 'dark', 'routine.svg')
+    public routine: { light: vscode.Uri; dark: vscode.Uri } = {
+        light: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'light', 'routine.svg'),
+        dark: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'dark', 'routine.svg')
     };
 
-    public tablePartitioned: { light: string; dark: string } = {
-        light: path.join(getExtensionUri().path, 'resources', 'light', 'table-partitioned.svg'),
-        dark: path.join(getExtensionUri().path, 'resources', 'dark', 'table-partitioned.svg')
+    public tablePartitioned: { light: vscode.Uri; dark: vscode.Uri } = {
+        light: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'light', 'table-partitioned.svg'),
+        dark: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'dark', 'table-partitioned.svg')
     };
 
-    public tableView: { light: string; dark: string } = {
-        light: path.join(getExtensionUri().path, 'resources', 'light', 'table-view.svg'),
-        dark: path.join(getExtensionUri().path, 'resources', 'dark', 'table-view.svg')
+    public tableView: { light: vscode.Uri; dark: vscode.Uri } = {
+        light: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'light', 'table-view.svg'),
+        dark: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'dark', 'table-view.svg')
     };
 
-    public table: { light: string; dark: string } = {
-        light: path.join(getExtensionUri().path, 'resources', 'light', 'table.svg'),
-        dark: path.join(getExtensionUri().path, 'resources', 'dark', 'table.svg')
+    public table: { light: vscode.Uri; dark: vscode.Uri } = {
+        light: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'light', 'table.svg'),
+        dark: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'dark', 'table.svg')
     };
 
-    public pinned: { light: string; dark: string } = {
-        light: path.join(getExtensionUri().path, 'resources', 'light', 'pinned.svg'),
-        dark: path.join(getExtensionUri().path, 'resources', 'dark', 'pinned.svg')
+    public pinned: { light: vscode.Uri; dark: vscode.Uri } = {
+        light: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'light', 'pinned.svg'),
+        dark: vscode.Uri.joinPath(getExtensionUri(), 'resources', 'dark', 'pinned.svg')
     };
 
 }

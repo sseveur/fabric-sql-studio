@@ -4,6 +4,7 @@ import { calculateLayout } from './dagLayout';
 import { renderGraphToSvg } from './svgRenderer';
 import { exportFilename, LineageSection, renderLineageHtml } from './lineageHtml';
 import { LineageExportService } from './lineageExportService';
+import { getContentSecurityPolicy, getNonce, reportCspViolation } from '../utils/webviewSecurity';
 
 const VIEW_TYPE = 'fabric-sql-lineage';
 
@@ -30,7 +31,7 @@ export function showMultiLineagePanel(result: MultiLineageResult, context: vscod
     // If panel already exists, reveal and update it
     if (currentPanel) {
         currentPanel.reveal(column);
-        updateMultiPanelContent(currentPanel, result);
+        updateMultiPanelContent(currentPanel, result, context.extensionUri);
         return;
     }
 
@@ -45,7 +46,7 @@ export function showMultiLineagePanel(result: MultiLineageResult, context: vscod
         }
     );
 
-    updateMultiPanelContent(currentPanel, result);
+    updateMultiPanelContent(currentPanel, result, context.extensionUri);
 
     // Handle messages from webview
     messageHandlerDisposable = currentPanel.webview.onDidReceiveMessage(message => {
@@ -57,6 +58,8 @@ export function showMultiLineagePanel(result: MultiLineageResult, context: vscod
             handleExportPngData(message);
         } else if (message.type === 'exportAllPngData') {
             handleExportAllPngData(message);
+        } else if (message.type === 'cspViolation') {
+            reportCspViolation('lineage', message.directive, message.blocked);
         } else if (message.type === 'exportError') {
             vscode.window.showErrorMessage(`Failed to export: ${message.error}`);
         }
@@ -86,7 +89,7 @@ export function showMultiLineagePanel(result: MultiLineageResult, context: vscod
     });
 }
 
-function updateMultiPanelContent(panel: vscode.WebviewPanel, result: MultiLineageResult): void {
+function updateMultiPanelContent(panel: vscode.WebviewPanel, result: MultiLineageResult, extensionUri: vscode.Uri): void {
     // Layout + SVG once per query; the page and the PNG/PDF export share them
     const sections: LineageSection[] = result.queries
         .filter(q => q.graph.nodes.length > 0)
@@ -97,7 +100,13 @@ function updateMultiPanelContent(panel: vscode.WebviewPanel, result: MultiLineag
     currentSvgData = sections;
 
     const exportTheme = vscode.workspace.getConfiguration('fabricSql').get<string>('lineageExportTheme', 'dark');
-    panel.webview.html = renderLineageHtml(sections, exportTheme);
+    const nonce = getNonce();
+    panel.webview.html = renderLineageHtml(sections, exportTheme, {
+        // SVG nodes carry style="" attributes; the PNG/PDF export draws the SVG through a blob: <img>
+        csp: getContentSecurityPolicy(panel.webview, nonce, { allowUnsafeInlineStyles: true, allowBlobImages: true }),
+        nonce,
+        codiconFontUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'resources', 'codicon.ttf')).toString(),
+    });
 }
 
 /**

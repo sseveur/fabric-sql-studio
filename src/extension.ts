@@ -6,7 +6,6 @@ import { AuthenticationWebviewViewProvider } from './activitybar/authenticationW
 import { SqlTreeDataProvider } from './activitybar/sqlTreeDataProvider';
 import { SETTING_ACTIVE_CONNECTION, SETTING_CONNECTIONS, SETTING_PINNED_OBJECTS } from './services/connections';
 import * as commands from './extensionCommands';
-import { WebviewViewProvider } from './tableResultsPanel/webviewViewProvider';
 import { FsqlCompletionItemProvider } from './language/fsqlCompletionItemProvider';
 import { FsqlDocumentSemanticTokensProvider } from './language/fsqlDocumentSemanticTokensProvider';
 import { FsqlInlayHintsProvider } from './language/fsqlInlayHintsProvider';
@@ -26,7 +25,6 @@ import { JobHistoryTreeDataProvider } from './activitybar/jobHistoryTreeDataProv
 import { FsqlNotebookSerializer, NOTEBOOK_TYPE } from './notebook/fsqlNotebookSerializer';
 import { FsqlNotebookController } from './notebook/fsqlNotebookController';
 
-export const fabricSqlWebviewViewProvider = new WebviewViewProvider();
 export const authenticationWebviewProvider = new AuthenticationWebviewViewProvider();
 export const sqlTreeDataProvider = new SqlTreeDataProvider();
 export const tableSchemaService = new TableSchemaService();

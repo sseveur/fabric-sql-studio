@@ -1,8 +1,14 @@
 import * as assert from 'assert';
-import { escapeHtml, exportFilename, LineageSection, renderLineageHtml, renderQuerySection } from '../../lineage/lineageHtml';
+import { escapeHtml, exportFilename, LineagePage, LineageSection, renderLineageHtml, renderQuerySection } from '../../lineage/lineageHtml';
 import { LineageNode, NodeType } from '../../services/lineageGraph';
 
 const node = (id: string, nodeType: NodeType): LineageNode => ({ id, name: id, fullName: `dbo.${id}`, nodeType, layer: 0 });
+
+const PAGE: LineagePage = {
+    csp: "default-src 'none'; script-src 'nonce-abc+/=' https://x.vscode-cdn.net; img-src data: blob:",
+    nonce: 'abc+/=',
+    codiconFontUri: 'https://x.vscode-cdn.net/ext/resources/codicon.ttf',
+};
 
 const section = (sqlText: string, types: NodeType[], svg = '<svg id="g"></svg>'): LineageSection => ({
     queryInfo: {
@@ -51,13 +57,13 @@ suite('lineageHtml', () => {
     });
 
     test('page header counts queries with singular / plural', () => {
-        assert.ok(renderLineageHtml([section('a', ['SOURCE'])], 'dark').includes('1 query with lineage'));
-        assert.ok(renderLineageHtml([section('a', ['SOURCE']), section('b', ['SOURCE'])], 'dark').includes('2 queries with lineage'));
+        assert.ok(renderLineageHtml([section('a', ['SOURCE'])], 'dark', PAGE).includes('1 query with lineage'));
+        assert.ok(renderLineageHtml([section('a', ['SOURCE']), section('b', ['SOURCE'])], 'dark', PAGE).includes('2 queries with lineage'));
     });
 
     test('export theme is embedded as a JS string that cannot break out of the script', () => {
-        assert.ok(renderLineageHtml([], 'light').includes('var exportTheme = "light";'));
-        const html = renderLineageHtml([], `x';alert(1);//</script><script>`);
+        assert.ok(renderLineageHtml([], 'light', PAGE).includes('var exportTheme = "light";'));
+        const html = renderLineageHtml([], `x';alert(1);//</script><script>`, PAGE);
         assert.ok(html.includes(`var exportTheme = "x';alert(1);//\\u003c/script>\\u003cscript>";`));
         assert.strictEqual(html.split('</script>').length, 2);
     });
@@ -67,5 +73,26 @@ suite('lineageHtml', () => {
         assert.strictEqual(exportFilename('png', undefined, undefined, d), 'lineage_query_20260105_070809.png');
         assert.strictEqual(exportFilename('pdf', 0, '3-9', d), 'lineage_query1_lines3-9_20260105_070809.pdf');
         assert.strictEqual(exportFilename('png', 2, undefined, d), 'lineage_query3_20260105_070809.png');
+    });
+
+    test('page carries the CSP meta, a nonce on its only script, and the local codicon font', () => {
+        const html = renderLineageHtml([section('a', ['SOURCE'])], 'dark', PAGE);
+        assert.ok(html.includes(`<meta http-equiv="Content-Security-Policy" content="default-src &#039;none&#039;; script-src &#039;nonce-abc+/=&#039;`));
+        const scripts = html.match(/<script\b[^>]*>/g) ?? [];
+        assert.deepStrictEqual(scripts, ['<script nonce="abc+/=">']);
+        assert.ok(html.includes(`url('https://x.vscode-cdn.net/ext/resources/codicon.ttf')`));
+        assert.ok(!html.includes('microsoft.github.io'));
+    });
+
+    test('page has no inline event-handler attributes a nonce CSP would block', () => {
+        const html = renderLineageHtml([section('a', ['SOURCE', 'TARGET'])], 'dark', PAGE);
+        assert.ok(!/\son[a-z]+\s*=\s*["']/i.test(html.replace(/<script\b[\s\S]*?<\/script>/g, '')));
+        assert.ok(!/javascript:/i.test(html));
+    });
+
+    test('page reports CSP violations to the host', () => {
+        const html = renderLineageHtml([], 'dark', PAGE);
+        assert.ok(html.includes(`addEventListener('securitypolicyviolation'`));
+        assert.ok(html.includes(`type: 'cspViolation'`));
     });
 });
