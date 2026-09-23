@@ -9,6 +9,7 @@ const KNOWN_GLOBAL_STATE_KEYS = [
 	'queryResultsMapping',
 	'queryResultsChartMapping',
 	'fabric-sql-query-history',
+	'fabric-sql-approved-token-hosts',
 ];
 
 export const commandClearExtensionCache = function (globalState: vscode.Memento) {

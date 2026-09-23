@@ -21,6 +21,8 @@ class StubEventEmitter {
 
 const vscodeStub = {
     EventEmitter: StubEventEmitter,
+    // Filled per test (e.g. window.showWarningMessage) by suites that drive a prompt.
+    window: {} as Record<string, unknown>,
     workspace: {
         getConfiguration: () => ({
             get: (_key: string, def: unknown) => def,

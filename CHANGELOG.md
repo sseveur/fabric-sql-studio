@@ -11,7 +11,7 @@ First public release.
 
 ### Added
 
-- **Entra ID sign-in** - Sign in with a Microsoft account through VS Code's Accounts menu, or reuse an `az login` session (`fabricSql.authMode`, `fabricSql.tenantId`). No app registration needed.
+- **Entra ID sign-in** - Sign in with a Microsoft account through VS Code's Accounts menu, or reuse an `az login` session (`fabricSql.authMode`, `fabricSql.tenantId`). No app registration needed. The token goes only to Microsoft-hosted SQL servers without asking; any other server needs a one-time Allow.
 - **Connections and explorer** - Named profiles for Fabric Warehouse / Lakehouse SQL endpoints, Azure SQL and SQL Server. `+` on the explorer picks a workspace and item from the Fabric REST API and writes the profile. The tree shows connection → database → schema → tables, views and routines, with preview, schema, open definition, copy path, pin and cross-connection search.
 - **Run T-SQL over TDS** - `Ctrl+Enter` runs the editor, `Ctrl+E` the block under the cursor. Queries naming another database are routed to the profile that owns it. Multi-statement batches render one grid per result set; DML reports affected rows; server errors land as diagnostics on the reported line. Rows are held host-side up to `fabricSql.maxRows` and paged into the grid, so no token crosses into the webview.
 - **Spark SQL on lakehouses** - `Ctrl+Shift+Enter` runs the selection on a reusable Livy session for the lakehouse chosen with `Select Spark Lakehouse`. Results land in the same grid, with session state in the sidebar and status bar and a `Stop Spark Session` command.

@@ -57,6 +57,7 @@ All settings live under `fabricSql.*`. The most useful ones:
 - VS Code 1.82+
 - Outbound TCP 1433 to the SQL endpoint
 - For Fabric: a Microsoft account with access to the workspace (Viewer is enough to query; Contributor for `queryinsights`)
+- Your sign-in is sent without asking only to Microsoft-hosted SQL servers (`*.fabric.microsoft.com`, `*.database.windows.net`, ...). Any other server, such as an on-premises SQL Server, asks once for permission and remembers the answer on that machine.
 
 ## Development
 

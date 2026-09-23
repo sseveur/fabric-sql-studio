@@ -1,6 +1,7 @@
 import * as sql from 'mssql';
 import { randomUUID as uuidv4 } from 'crypto';
 import { getAccessToken, SCOPE_TDS } from './auth';
+import { ensureTokenHostAllowed } from './tokenHosts';
 import { SqlColumn, SqlResultSet } from '../tableResultsPanel/resultContract';
 import { ConnectionRef } from './objectRef';
 
@@ -53,6 +54,7 @@ export class SqlServerClient {
     constructor(public readonly target: SqlConnectionTarget) { }
 
     private async getPool(): Promise<sql.ConnectionPool> {
+        await ensureTokenHostAllowed(this.target.server);
         const tokenInfo = await getAccessToken(SCOPE_TDS, true);
         if (!tokenInfo) { throw new Error('Not signed in. Use the Authentication view to sign in first.'); }
 
@@ -145,6 +147,7 @@ export class SqlServerClient {
      * in SHOWPLAN mode would make every later query on it hang.
      */
     public async explain(text: string): Promise<string> {
+        await ensureTokenHostAllowed(this.target.server);
         const tokenInfo = await getAccessToken(SCOPE_TDS, true);
         if (!tokenInfo) { throw new Error('Not signed in. Use the Authentication view to sign in first.'); }
         const solo = await new sql.ConnectionPool({
