@@ -1,8 +1,10 @@
+-- %%
 -- 1. Plain preview (routing: database named → Zim_LH_Dev profile)
 SELECT TOP 100
 	*
 FROM [Zim_LH_Silver_Dev].[OMNEO].[MRT_PROFILES];
 
+-- %%
 -- 2. CTE chain: Preview CTE lens on each, hover a CTE name for its columns,
 --    Show Lineage should draw MRT_PROFILES → by_type → ranked → SELECT Result
 WITH by_type AS (
@@ -25,6 +27,7 @@ FROM ranked
 WHERE rn <= 3
 ORDER BY profile_type, rn;
 
+-- %%
 -- 3. Join across two databases in the same workspace
 --    Preview Table at cursor on `a` / `[dimAssociate_ref]`; Profile Column on p.profile_currency
 SELECT TOP 50
@@ -35,10 +38,14 @@ FROM [Zim_LH_Silver_Dev].[OMNEO].[MRT_PROFILES] p
 LEFT JOIN [Zim_WH_Gold_Dev].[common].[dimAssociate_ref] a
 	ON a.associate_id = p.profile_id;
 
+-- %%
 -- 4. Multi-result batch + rowsAffected banner: semicolon inside a string must not split
 SELECT 'a;b' AS s, 1 AS n;
+
+-- %%
 SELECT GETDATE() AS now_utc, SYSTEM_USER AS who;
 
+-- %%
 -- 5. Estimated plan target: aggregate + window, no execution
 SELECT
 	profile_gender,
@@ -48,10 +55,12 @@ FROM [Zim_LH_Silver_Dev].[OMNEO].[MRT_PROFILES]
 GROUP BY profile_gender
 HAVING COUNT(*) > 10;
 
+-- %%
 -- 6. Deliberate error: line number in Problems should point here
 SELECT nope_column
 FROM [Zim_LH_Silver_Dev].[OMNEO].[MRT_PROFILES];
 
+-- %%
 -- 7. Spark SQL (Ctrl+Shift+Enter on a selection): first run asks for a lakehouse and starts a
 --    Livy session (1–3 min cold start, status bar shows it); later runs reuse it.
 --    Spark SQL dialect: LIMIT not TOP, backticks not brackets, schema.table (schema-enabled lakehouse).

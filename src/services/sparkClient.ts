@@ -62,8 +62,15 @@ export async function pickSparkTarget(): Promise<SparkTarget | undefined> {
 
 let status: vscode.StatusBarItem | undefined;
 let idleTimer: NodeJS.Timeout | undefined;
+let sessionState: string | null = null;
+const changed = new vscode.EventEmitter<void>();
+/** Fires when the session state shown in the status bar / sidebar changes. */
+export const onDidChangeSpark = changed.event;
+/** 'idle', 'starting…', 'running…' while a session exists; null when none. */
+export function getSparkState(): string | null { return sessionState; }
 
 function setStatus(text: string | null, target?: SparkTarget): void {
+    if (sessionState !== text) { sessionState = text; changed.fire(); }
     if (!status) {
         status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
         status.command = 'fabricSql.stop-spark-session';

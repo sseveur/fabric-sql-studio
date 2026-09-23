@@ -492,12 +492,14 @@
 			{
 				"command": "fabricSql.stop-spark-session",
 				"title": "Stop Spark Session",
-				"category": "Fabric SQL"
+				"category": "Fabric SQL",
+				"icon": "$(debug-stop)"
 			},
 			{
 				"command": "fabricSql.select-spark-lakehouse",
 				"title": "Select Spark Lakehouse",
-				"category": "Fabric SQL"
+				"category": "Fabric SQL",
+				"icon": "$(edit)"
 			},
 			{
 				"command": "fabricSql.run-query",
@@ -844,6 +846,16 @@
 			],
 			"view/item/context": [
 				{
+					"command": "fabricSql.stop-spark-session",
+					"when": "view == 'fabric-sql-spark' && viewItem == 'fsql-spark-session-live'",
+					"group": "inline"
+				},
+				{
+					"command": "fabricSql.select-spark-lakehouse",
+					"when": "view == 'fabric-sql-spark' && viewItem == 'fsql-spark-lakehouse'",
+					"group": "inline"
+				},
+				{
 					"command": "fabricSql.job-history-details",
 					"when": "viewItem == 'fsql-job-history-job'",
 					"group": "inline"
@@ -926,6 +938,12 @@
 					"contextualTitle": "Fabric SQL",
 					"type": "tree",
 					"visibility": "collapsed"
+				},
+				{
+					"id": "fabric-sql-spark",
+					"name": "Spark",
+					"contextualTitle": "Fabric SQL",
+					"type": "tree"
 				}
 			]
 		},

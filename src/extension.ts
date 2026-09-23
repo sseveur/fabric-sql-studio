@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { stopSparkSessions } from './services/sparkClient';
+import { SparkTreeDataProvider } from './activitybar/sparkTreeDataProvider';
 import { Uri, StatusBarItem, ExtensionContext } from 'vscode';
 import { AuthenticationWebviewViewProvider } from './activitybar/authenticationWebviewViewProvider';
 import { SqlTreeDataProvider } from './activitybar/sqlTreeDataProvider';
@@ -122,6 +123,7 @@ export function activate(context: ExtensionContext) {
 			{ "globalState": context.globalState, queryResultsWebviewMapping: queryResultsWebviewMapping }),
 		vscode.commands.registerCommand(commands.COMMAND_STOP_SPARK_SESSION, commands.commandStopSparkSession),
 		vscode.commands.registerCommand(commands.COMMAND_SELECT_SPARK_LAKEHOUSE, commands.commandSelectSparkLakehouse),
+		vscode.window.registerTreeDataProvider('fabric-sql-spark', new SparkTreeDataProvider()),
 		// Best effort: don't leave a Spark session burning capacity after the window closes.
 		{ dispose: () => { void stopSparkSessions(); } },
 	);
