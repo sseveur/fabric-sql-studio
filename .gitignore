@@ -379,8 +379,10 @@ new_features/
 # Cargo lock files
 **/.DS_Store
 
-# Build artifacts
+# Webview bundles, built by webpack (npm run compile / vscode:prepublish)
+resources/grid-v2.js
 resources/grid-v2.js.map
+resources/notebook-renderer.js
 resources/notebook-renderer.js.map
 
 # Source / design artifacts (not shipped)
