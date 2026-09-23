@@ -21,6 +21,9 @@ export interface LineageEdge {
     id: string;
     source: string;                // Source node id
     target: string;                // Target node id
+    /** Set by the layout for edges that span layers: where the edge crosses each layer in between
+     *  (x = left edge of that layer's column, y = the lane it uses there). */
+    waypoints?: Array<{ x: number; y: number }>;
 }
 
 export interface LineageGraph {

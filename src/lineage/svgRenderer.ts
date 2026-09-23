@@ -28,14 +28,15 @@ export function renderGraphToSvg(
         return renderEmptyState(width, height);
     }
 
-    const edges = graph.edges.map(edge => renderEdge(edge, graph.nodes, cfg)).join('\n');
+    const ports = assignPorts(graph, cfg);
+    const edges = graph.edges.map(edge => renderEdge(edge, graph.nodes, cfg, ports.get(edge.id))).join('\n');
     const nodes = graph.nodes.map(node => renderNode(node, cfg)).join('\n');
 
     return `
         <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="lineage-graph" xmlns="http://www.w3.org/2000/svg">
             <defs>
-                <marker id="arrowhead" viewBox="0 0 10 10" markerWidth="10" markerHeight="10"
-                    refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+                <marker id="arrowhead" viewBox="0 0 10 10" markerWidth="${ARROW_LENGTH}" markerHeight="${ARROW_LENGTH}"
+                    refX="0" refY="5" orient="auto" markerUnits="userSpaceOnUse">
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--vscode-descriptionForeground, #888)"/>
                 </marker>
                 <!-- Glow filter for hover effect -->
@@ -61,18 +62,60 @@ export function renderGraphToSvg(
     `;
 }
 
+/** The arrowhead's length; the path stops this far short of the box so the tip lands on it. */
+const ARROW_LENGTH = 8;
+/** Gap between the arrow tip and the target box. */
+const ARROW_GAP = 2;
+/** Vertical distance between neighbouring edge ends on one side of a box. */
+const PORT_SPACING = 10;
+
 /**
- * Render a single edge as a curved Bezier path
+ * Where each edge leaves its source and enters its target. Edges on the same side of a box are
+ * spread out, ordered by where they come from / go to, so arrowheads never stack and
+ * neighbouring edges do not cross right at the box.
  */
-function renderEdge(edge: LineageEdge, nodes: LineageNode[], cfg: LayoutConfig): string {
+function assignPorts(graph: LineageGraph, cfg: LayoutConfig): Map<string, { y1: number; y2: number }> {
+    const byId = new Map(graph.nodes.map(n => [n.id, n] as const));
+    const center = (n: LineageNode) => n.y! + cfg.nodeHeight / 2;
+    // The point each edge heads for right after leaving / right before entering
+    const next = (e: LineageEdge) => e.waypoints?.[0]?.y ?? center(byId.get(e.target)!);
+    const prev = (e: LineageEdge) => e.waypoints?.[e.waypoints.length - 1]?.y ?? center(byId.get(e.source)!);
+
+    const drawable = graph.edges.filter(e => byId.get(e.source)?.y !== undefined && byId.get(e.target)?.y !== undefined);
+    const ports = new Map<string, { y1: number; y2: number }>();
+    drawable.forEach(e => ports.set(e.id, { y1: 0, y2: 0 }));
+
+    const spread = (edges: LineageEdge[], node: LineageNode, key: (e: LineageEdge) => number, end: 'y1' | 'y2') => {
+        const sorted = edges.slice().sort((a, b) => key(a) - key(b));
+        const step = sorted.length > 1 ? Math.min(PORT_SPACING, (cfg.nodeHeight - 16) / (sorted.length - 1)) : 0;
+        sorted.forEach((e, i) => { ports.get(e.id)![end] = center(node) + (i - (sorted.length - 1) / 2) * step; });
+    };
+    for (const node of graph.nodes) {
+        if (node.y === undefined) { continue; }
+        spread(drawable.filter(e => e.source === node.id), node, next, 'y1');
+        spread(drawable.filter(e => e.target === node.id), node, prev, 'y2');
+    }
+    return ports;
+}
+
+/**
+ * Render a single edge: right side of the source to left side of the target, through the lane
+ * it was given in every layer it skips.
+ */
+function renderEdge(edge: LineageEdge, nodes: LineageNode[], cfg: LayoutConfig, port?: { y1: number; y2: number }): string {
     const sourceNode = nodes.find(n => n.id === edge.source);
     const targetNode = nodes.find(n => n.id === edge.target);
 
-    if (!sourceNode || !targetNode || sourceNode.x === undefined || targetNode.x === undefined) {
+    if (!sourceNode || !targetNode || sourceNode.x === undefined || targetNode.x === undefined || !port) {
         return '';
     }
 
-    const path = generateBezierPath(sourceNode, targetNode, cfg);
+    const path = edgePath(
+        { x: sourceNode.x + cfg.nodeWidth, y: port.y1 },
+        { x: targetNode.x! - ARROW_GAP - ARROW_LENGTH, y: port.y2 },
+        edge.waypoints ?? [],
+        cfg.nodeWidth
+    );
 
     return `
         <path
@@ -89,37 +132,35 @@ function renderEdge(edge: LineageEdge, nodes: LineageNode[], cfg: LayoutConfig):
 }
 
 /**
- * Generate a cubic Bezier path between two nodes
- * Creates curved paths that spread out when edges skip layers
+ * SVG path: horizontal-tangent cubic curves between columns, straight runs across each skipped
+ * column. Every curve leaves and arrives horizontally, so edges read left-to-right and the
+ * arrowhead always points straight into the box.
  */
-function generateBezierPath(from: LineageNode, to: LineageNode, cfg: LayoutConfig): string {
-    // Start from right edge of source node (center height)
-    const x1 = from.x! + cfg.nodeWidth;
-    const y1 = from.y! + cfg.nodeHeight / 2;
-
-    // End at left edge of target node with small gap for arrow (center height)
-    const x2 = to.x! - 4;
-    const y2 = to.y! + cfg.nodeHeight / 2;
-
-    // Calculate layer difference to create curved paths for edges that skip layers
-    const layerDiff = to.layer - from.layer;
-    const dx = x2 - x1;
-
-    // For edges spanning multiple layers, add vertical curve offset
-    // This makes edges visible when they would otherwise overlap
-    let curveOffset = 0;
-    if (layerDiff > 1) {
-        // Alternate curve direction and increase magnitude for longer edges
-        curveOffset = (layerDiff - 1) * 30 * (layerDiff % 2 === 0 ? 1 : -1);
+export function edgePath(
+    start: { x: number; y: number },
+    end: { x: number; y: number },
+    waypoints: Array<{ x: number; y: number }>,
+    columnWidth: number
+): string {
+    const r = (v: number) => Math.round(v * 10) / 10;
+    const parts = [`M ${r(start.x)} ${r(start.y)}`];
+    let at = start;
+    const curveTo = (to: { x: number; y: number }) => {
+        if (Math.abs(to.y - at.y) < 0.5) {
+            parts.push(`L ${r(to.x)} ${r(to.y)}`);
+        } else {
+            const mid = (to.x - at.x) / 2;
+            parts.push(`C ${r(at.x + mid)} ${r(at.y)}, ${r(to.x - mid)} ${r(to.y)}, ${r(to.x)} ${r(to.y)}`);
+        }
+        at = to;
+    };
+    for (const w of waypoints) {
+        curveTo({ x: w.x, y: w.y });
+        parts.push(`L ${r(w.x + columnWidth)} ${r(w.y)}`);
+        at = { x: w.x + columnWidth, y: w.y };
     }
-
-    // Control points for smooth curve
-    const cx1 = x1 + dx * 0.3;
-    const cy1 = y1 + curveOffset;
-    const cx2 = x2 - dx * 0.3;
-    const cy2 = y2 + curveOffset;
-
-    return `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
+    curveTo(end);
+    return parts.join(' ');
 }
 
 /**
