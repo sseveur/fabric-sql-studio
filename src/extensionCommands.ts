@@ -367,6 +367,10 @@ async function runSparkQuery(resultsGridRender: ResultsGridRender, queryText: st
 		const message = e?.message ?? String(e);
 		showQueryStatus(`$(error) Spark error · ${t.label}`, message);
 		await resultsGridRender.postMessage({ requestType: 'error', error: { message, reason: `Spark · ${t.label}` } } as SqlErrorMessage);
+		if (/TABLE_OR_VIEW_NOT_FOUND|SCHEMA_NOT_FOUND/.test(message)) {
+			vscode.window.showWarningMessage(`Table not found on ${t.label}. Schema-enabled lakehouses need schema.table.`, 'Switch Lakehouse')
+				.then(choice => { if (choice) { void vscode.commands.executeCommand(COMMAND_SELECT_SPARK_LAKEHOUSE); } });
+		}
 		await queryHistoryService?.addEntry({ query: queryText, timestamp: queryStartTime, bytesProcessed: 0, durationMs: Date.now() - queryStartTime, projectId: `spark:${t.label}`, status: 'error', errorMessage: message });
 		return 0;
 	}

@@ -54,9 +54,10 @@ FROM [Zim_LH_Silver_Dev].[OMNEO].[MRT_PROFILES];
 
 -- 7. Spark SQL (Ctrl+Shift+Enter on a selection): first run asks for a lakehouse and starts a
 --    Livy session (1–3 min cold start, status bar shows it); later runs reuse it.
---    Spark SQL dialect: LIMIT not TOP, backticks not brackets, table names relative to the lakehouse.
+--    Spark SQL dialect: LIMIT not TOP, backticks not brackets, schema.table (schema-enabled lakehouse).
+--    Wrong lakehouse? 'Fabric SQL: Select Spark Lakehouse', or the Switch button on a not-found error.
 SELECT profile_type, COUNT(*) AS n
-FROM MRT_PROFILES
+FROM OMNEO.MRT_PROFILES
 GROUP BY profile_type
 ORDER BY n DESC
 LIMIT 20;

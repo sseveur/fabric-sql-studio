@@ -50,6 +50,8 @@ export async function pickSparkTarget(): Promise<SparkTarget | undefined> {
     const l = await vscode.window.showQuickPick(lakehouses.map(x => ({ label: x.displayName, x })), { title: 'Spark lakehouse (2/2): lakehouse' });
     if (!l) { return undefined; }
     const target: SparkTarget = { workspaceId: w.x.id, lakehouseId: l.x.id, label: `${w.x.displayName} / ${l.x.displayName}` };
+    const previous = getSparkTarget();
+    if (previous && keyOf(previous) !== keyOf(target)) { await stopSparkSessions(); }   // don't leave the old one burning capacity
     await vscode.workspace.getConfiguration().update(SETTING_SPARK_LAKEHOUSE, target, vscode.ConfigurationTarget.Global);
     return target;
 }
