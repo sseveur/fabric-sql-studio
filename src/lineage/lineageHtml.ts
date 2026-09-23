@@ -236,6 +236,9 @@ export function renderLineageHtml(sections: LineageSection[], exportTheme: strin
             border: 1px solid var(--vscode-panel-border);
             border-radius: 6px;
             background-color: var(--vscode-editor-background);
+            /* Dot grid, view only: the export paints a plain background */
+            background-image: radial-gradient(circle, var(--vscode-editorWidget-border, rgba(128,128,128,0.35)) 1px, transparent 1.2px);
+            background-size: 18px 18px;
             min-height: 300px;
             flex: 1;
         }
@@ -350,10 +353,12 @@ export function renderLineageHtml(sections: LineageSection[], exportTheme: strin
             gap: 6px;
         }
 
-        .legend-color {
-            width: 12px;
-            height: 12px;
-            border-radius: 3px;
+        .legend-tag {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            padding: 2px 5px;
+            border-radius: 4px;
         }
     </style>
 </head>
@@ -469,6 +474,43 @@ export function renderLineageHtml(sections: LineageSection[], exportTheme: strin
                 });
             });
 
+            // Hover a node: keep its whole upstream and downstream lineage, fade the rest
+            document.querySelectorAll('.lineage-graph').forEach(function(svg) {
+                var edges = Array.prototype.slice.call(svg.querySelectorAll('.edge'));
+                var nodes = Array.prototype.slice.call(svg.querySelectorAll('.node'));
+                function walk(start, from, to) {
+                    var seen = {}; seen[start] = true;
+                    var queue = [start];
+                    while (queue.length) {
+                        var id = queue.shift();
+                        edges.forEach(function(e) {
+                            if (e.getAttribute(from) === id) {
+                                e.classList.add('related');
+                                var next = e.getAttribute(to);
+                                if (!seen[next]) { seen[next] = true; queue.push(next); }
+                            }
+                        });
+                    }
+                    return seen;
+                }
+                nodes.forEach(function(node) {
+                    node.addEventListener('mouseenter', function() {
+                        var id = node.getAttribute('data-id');
+                        var down = walk(id, 'data-source', 'data-target');
+                        var up = walk(id, 'data-target', 'data-source');
+                        nodes.forEach(function(n) {
+                            var nid = n.getAttribute('data-id');
+                            if (down[nid] || up[nid]) { n.classList.add('related'); }
+                        });
+                        svg.classList.add('focus');
+                    });
+                    node.addEventListener('mouseleave', function() {
+                        svg.classList.remove('focus');
+                        svg.querySelectorAll('.related').forEach(function(el) { el.classList.remove('related'); });
+                    });
+                });
+            });
+
             // Click handler for nodes - navigate to source position
             document.querySelectorAll('.node').forEach(function(node) {
                 node.style.cursor = 'pointer';
@@ -511,7 +553,9 @@ export function renderLineageHtml(sections: LineageSection[], exportTheme: strin
                 '--vscode-descriptionForeground': '#888888',
                 '--vscode-panel-border': '#3e3e3e',
                 '--vscode-sideBar-background': '#252526',
-                '--vscode-list-hoverBackground': '#2a2d2e'
+                '--vscode-list-hoverBackground': '#2a2d2e',
+                '--vscode-editorWidget-background': '#252526',
+                '--vscode-editorWidget-border': '#454545'
             };
             var lightColorMap = {
                 '--vscode-editor-background': '#ffffff',
@@ -519,7 +563,9 @@ export function renderLineageHtml(sections: LineageSection[], exportTheme: strin
                 '--vscode-descriptionForeground': '#666666',
                 '--vscode-panel-border': '#d0d0d0',
                 '--vscode-sideBar-background': '#f3f3f3',
-                '--vscode-list-hoverBackground': '#e8e8e8'
+                '--vscode-list-hoverBackground': '#e8e8e8',
+                '--vscode-editorWidget-background': '#ffffff',
+                '--vscode-editorWidget-border': '#d4d4d4'
             };
 
             function resolveThemeColor(varName, fallback) {

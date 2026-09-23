@@ -2,7 +2,8 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import { calculateLayout, fitOrdered, getLayoutConfig } from '../../lineage/dagLayout';
-import { edgePath, renderGraphToSvg } from '../../lineage/svgRenderer';
+import { edgePath, fitText, renderGraphToSvg } from '../../lineage/svgRenderer';
+import { renderLineageHtml } from '../../lineage/lineageHtml';
 import { buildMultiQueryLineage, LineageGraph, NodeType } from '../../services/lineageGraph';
 
 const cfg = getLayoutConfig();
@@ -134,6 +135,45 @@ suite('lineage layout', () => {
         // Selection starting mid-line: first-line columns shift too
         const indented = buildMultiQueryLineage('SELECT * FROM dbo.t', { line: 7, column: 5 }).queries[0].graph.nodes.find(n => n.nodeType === 'SOURCE')!;
         assert.deepStrictEqual([indented.sourceLine, indented.sourceColumn], [7, 5 + 'SELECT * FROM '.length]);
+    });
+
+    test('cards: badge tag per type, schema / write mode as subtitle, long names cut with an ellipsis', () => {
+        const g = graph([['raw.orders', 0, 'SOURCE'], ['stg', 1, 'CTE'], ['mart.fct', 2, 'TARGET']], [['raw.orders', 'stg'], ['stg', 'mart.fct']]);
+        g.nodes[0].name = 'orders';
+        g.nodes[2].name = 'fct';
+        g.nodes[2].statementType = 'INSERT';
+        const { width, height } = calculateLayout(g);
+        const svg = renderGraphToSvg(g, width, height);
+        for (const tag of ['SRC', 'CTE', 'TGT']) { assert.ok(svg.includes(`>${tag}</text>`), tag); }
+        assert.ok(/class="node-type"[^>]*>raw</.test(svg.replace(/\s+/g, ' ')), 'source shows its schema');
+        assert.ok(svg.includes('INSERT · mart'), 'target shows how and where it is written');
+        assert.strictEqual(fitText('a_very_long_table_name_indeed', 70, 7), 'a_very_lo\u2026');
+        assert.strictEqual(fitText('short', 70, 7), 'short');
+    });
+
+    test('export: every theme colour the graph uses is in both export colour maps', () => {
+        for (const g of samples()) {
+            const { width, height } = calculateLayout(g);
+            const svg = renderGraphToSvg(g, width, height);
+            const page = renderLineageHtml([{ queryInfo: { graph: g, queryIndex: 0, startLine: 1, endLine: 1, sqlText: '' }, svg }], 'dark',
+                { csp: '', nonce: 'n', codiconFontUri: 'x' });
+            const map = (name: string) => new RegExp(`var ${name} = \\{([\\s\\S]*?)\\};`).exec(page)![1];
+            // Attribute colours only: the font inside <style> resolves from the live theme by design
+            const used = new Set([...svg.replace(/<style>[\s\S]*?<\/style>/g, '').matchAll(/var\((--[\w-]+)/g)].map(m => m[1]));
+            assert.ok(used.size >= 4);
+            for (const v of used) {
+                assert.ok(map('darkColorMap').includes(`'${v}'`), `${v} missing from dark export map`);
+                assert.ok(map('lightColorMap').includes(`'${v}'`), `${v} missing from light export map`);
+            }
+        }
+    });
+
+    test('export: no attribute carries a quoted font list that would break the serialized SVG', () => {
+        const g = samples()[0];
+        const { width, height } = calculateLayout(g);
+        const svg = renderGraphToSvg(g, width, height);
+        assert.ok(!/font-family="/.test(svg));
+        assert.ok(/<style>text \{ font-family: var\(--vscode-font-family/.test(svg));
     });
 });
 

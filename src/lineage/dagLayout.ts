@@ -16,10 +16,10 @@ export interface LayoutResult {
 }
 
 const DEFAULT_CONFIG: LayoutConfig = {
-    nodeWidth: 160,
-    nodeHeight: 50,
-    layerSpacing: 220,
-    nodeSpacing: 70,
+    nodeWidth: 200,
+    nodeHeight: 40,
+    layerSpacing: 290,
+    nodeSpacing: 56,
     paddingX: 40,
     paddingY: 40
 };

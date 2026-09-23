@@ -2,16 +2,38 @@ import { LineageGraph, LineageNode, LineageEdge, NodeType } from "../services/li
 import { LayoutConfig, getLayoutConfig } from "./dagLayout";
 
 /**
- * Node colors by type (dbt-inspired palette)
+ * Accent per node type: used only for the badge, the hover outline and the legend, so the
+ * cards themselves stay neutral. Mid-tone hues that read on both dark and light themes.
  */
 /* eslint-disable @typescript-eslint/naming-convention */
 const NODE_COLORS: Record<NodeType, string> = {
-    'SOURCE': '#3794ff',    // Blue
-    'CTE': '#9b59b6',       // Purple
-    'TARGET': '#89d185',    // Green
-    'RESULT': '#f0a030'     // Orange - for SELECT query results
+    'SOURCE': '#3b9eff',    // blue
+    'CTE': '#a371f7',       // violet
+    'TARGET': '#3fb950',    // green
+    'RESULT': '#f0883e'     // orange
+};
+
+/** Short tag under the badge icon, dbt style. */
+const NODE_TAGS: Record<NodeType, string> = {
+    'SOURCE': 'SRC',
+    'CTE': 'CTE',
+    'TARGET': 'TGT',
+    'RESULT': 'OUT'
+};
+
+/** 16×16 stroke icons: database, cube, table, output arrow. */
+const NODE_ICONS: Record<NodeType, string> = {
+    'SOURCE': 'M3 4.5c0-1.1 2.2-2 5-2s5 .9 5 2-2.2 2-5 2-5-.9-5-2z M3 4.5v7c0 1.1 2.2 2 5 2s5-.9 5-2v-7 M3 8c0 1.1 2.2 2 5 2s5-.9 5-2',
+    'CTE': 'M8 1.8l5.5 3.1v6.2L8 14.2l-5.5-3.1V4.9z M2.5 4.9L8 8l5.5-3.1 M8 8v6.2',
+    'TARGET': 'M2.5 3.5h11v9h-11z M2.5 6.5h11 M6.5 6.5v6',
+    'RESULT': 'M2.5 8h7 M7 5l3 3-3 3 M12.5 3v10'
 };
 /* eslint-enable @typescript-eslint/naming-convention */
+
+/** Width of the coloured badge on the left of each card. */
+const BADGE_WIDTH = 36;
+/** Where the name starts, right of the badge. */
+const TEXT_X = BADGE_WIDTH + 10;
 
 /**
  * Render the lineage graph as an SVG string
@@ -34,18 +56,15 @@ export function renderGraphToSvg(
 
     return `
         <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="lineage-graph" xmlns="http://www.w3.org/2000/svg">
+            <!-- Inside the SVG so the PNG/PDF export keeps the font; a font list with quotes cannot go in an attribute -->
+            <style>text { font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif); }</style>
             <defs>
                 <marker id="arrowhead" viewBox="0 0 10 10" markerWidth="${ARROW_LENGTH}" markerHeight="${ARROW_LENGTH}"
                     refX="0" refY="5" orient="auto" markerUnits="userSpaceOnUse">
-                    <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--vscode-descriptionForeground, #888)"/>
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--vscode-descriptionForeground, #888)" fill-opacity="0.8"/>
                 </marker>
-                <!-- Glow filter for hover effect -->
-                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-                    <feMerge>
-                        <feMergeNode in="coloredBlur"/>
-                        <feMergeNode in="SourceGraphic"/>
-                    </feMerge>
+                <filter id="card-shadow" x="-10%" y="-20%" width="120%" height="150%">
+                    <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#000" flood-opacity="0.18"/>
                 </filter>
             </defs>
 
@@ -63,7 +82,7 @@ export function renderGraphToSvg(
 }
 
 /** The arrowhead's length; the path stops this far short of the box so the tip lands on it. */
-const ARROW_LENGTH = 8;
+const ARROW_LENGTH = 6;
 /** Gap between the arrow tip and the target box. */
 const ARROW_GAP = 2;
 /** Vertical distance between neighbouring edge ends on one side of a box. */
@@ -122,8 +141,9 @@ function renderEdge(edge: LineageEdge, nodes: LineageNode[], cfg: LayoutConfig, 
             d="${path}"
             class="edge"
             fill="none"
-            stroke="var(--vscode-descriptionForeground, #666)"
-            stroke-width="2"
+            stroke="var(--vscode-descriptionForeground, #888)"
+            stroke-opacity="0.55"
+            stroke-width="1.25"
             marker-end="url(#arrowhead)"
             data-source="${escapeAttr(edge.source)}"
             data-target="${escapeAttr(edge.target)}"
@@ -172,7 +192,11 @@ function renderNode(node: LineageNode, cfg: LayoutConfig): string {
     }
 
     const color = NODE_COLORS[node.nodeType];
-    const typeLabel = getTypeLabel(node);
+    const w = cfg.nodeWidth, h = cfg.nodeHeight, r = 6;
+    const subtitle = nodeSubtitle(node);
+    const textWidth = w - TEXT_X - 10;
+    // Name and subtitle stacked, or the name alone centred
+    const nameY = subtitle ? h / 2 - 3 : h / 2 + 4;
 
     return `
         <g class="node node-${node.nodeType.toLowerCase()}"
@@ -182,50 +206,23 @@ function renderNode(node: LineageNode, cfg: LayoutConfig): string {
            data-fullname="${escapeAttr(node.fullName)}"
            ${node.sourceLine ? `data-line="${node.sourceLine}"` : ''}
            ${node.sourceColumn ? `data-column="${node.sourceColumn}"` : ''}>
-            <!-- Tooltip with full name -->
-            <title>${escapeHtml(node.fullName)}</title>
-            <!-- Node background -->
-            <rect
-                width="${cfg.nodeWidth}"
-                height="${cfg.nodeHeight}"
-                rx="6"
-                ry="6"
-                fill="var(--vscode-editor-background, #1e1e1e)"
-                stroke="${color}"
-                stroke-width="2"
-                class="node-rect"
-            />
-            <!-- Color accent bar -->
-            <rect
-                x="0"
-                y="0"
-                width="4"
-                height="${cfg.nodeHeight}"
-                rx="2"
-                ry="2"
-                fill="${color}"
-            />
-            <!-- Node name -->
-            <text
-                x="${cfg.nodeWidth / 2}"
-                y="20"
-                text-anchor="middle"
-                class="node-name"
-                fill="var(--vscode-foreground, #ccc)"
-                font-size="12"
-                font-weight="600">
-                ${escapeHtml(truncateName(node.name, 18))}
-            </text>
-            <!-- Node type label -->
-            <text
-                x="${cfg.nodeWidth / 2}"
-                y="38"
-                text-anchor="middle"
-                class="node-type"
-                fill="var(--vscode-descriptionForeground, #888)"
-                font-size="10">
-                ${escapeHtml(typeLabel)}
-            </text>
+            <title>${escapeHtml(node.fullName)}${node.statementType ? ` (${escapeHtml(node.statementType)})` : ''}</title>
+            <rect class="node-rect" width="${w}" height="${h}" rx="${r}" ry="${r}"
+                fill="var(--vscode-editorWidget-background, #252526)"
+                stroke="var(--vscode-editorWidget-border, #454545)" stroke-width="1"
+                filter="url(#card-shadow)"/>
+            <path d="M ${r} 0.5 H ${BADGE_WIDTH} V ${h - 0.5} H ${r} Q 0.5 ${h - 0.5} 0.5 ${h - r} V ${r} Q 0.5 0.5 ${r} 0.5 Z"
+                fill="${color}" fill-opacity="0.14"/>
+            <g transform="translate(${(BADGE_WIDTH - 16) / 2}, ${h / 2 - 14})" fill="none" stroke="${color}"
+                stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="${NODE_ICONS[node.nodeType]}"/>
+            </g>
+            <text x="${BADGE_WIDTH / 2}" y="${h / 2 + 13}" text-anchor="middle" font-size="8" font-weight="700"
+                letter-spacing="0.4" fill="${color}" class="node-tag">${NODE_TAGS[node.nodeType]}</text>
+            <text x="${TEXT_X}" y="${nameY}" class="node-name" font-size="12.5" font-weight="600"
+                fill="var(--vscode-foreground, #ccc)">${escapeHtml(fitText(node.name, textWidth, 6.9))}</text>
+            ${subtitle ? `<text x="${TEXT_X}" y="${h / 2 + 11}" class="node-type" font-size="10.5"
+                fill="var(--vscode-descriptionForeground, #888)">${escapeHtml(fitText(subtitle, textWidth, 5.9))}</text>` : ''}
         </g>
     `;
 }
@@ -249,21 +246,22 @@ function renderEmptyState(width: number, height: number): string {
 }
 
 /**
- * Get display label for node type
+ * Second line of a card: where a table lives (`raw`, `db.schema`) and, for targets, how it is
+ * written. CTEs and the query result need none.
  */
-function getTypeLabel(node: LineageNode): string {
-    if (node.statementType) {
-        return `${node.nodeType} (${node.statementType})`;
+function nodeSubtitle(node: LineageNode): string {
+    const parts = node.fullName.split('.');
+    const qualifier = parts.slice(0, -1).join('.');
+    if (node.nodeType === 'TARGET') {
+        return [node.statementType, qualifier].filter(Boolean).join(' · ');
     }
-    return node.nodeType;
+    return node.nodeType === 'SOURCE' ? qualifier : '';
 }
 
-/**
- * Truncate name if too long
- */
-function truncateName(name: string, maxLength: number): string {
-    if (name.length <= maxLength) {return name;}
-    return name.substring(0, maxLength - 2) + '..';
+/** Cut `text` with an ellipsis to fit `maxWidth` px, from an average glyph width for the font size. */
+export function fitText(text: string, maxWidth: number, charWidth: number): string {
+    const max = Math.floor(maxWidth / charWidth);
+    return text.length <= max ? text : text.slice(0, Math.max(1, max - 1)) + '\u2026';
 }
 
 /**
@@ -295,48 +293,40 @@ export function getGraphStyles(): string {
             min-height: 200px;
         }
 
-        .edge {
-            transition: stroke 0.2s, stroke-width 0.2s;
+        .edge, .node {
+            transition: opacity 0.15s, stroke 0.15s, stroke-opacity 0.15s;
         }
 
         .edge:hover {
             stroke: var(--vscode-focusBorder, #007acc);
-            stroke-width: 3;
+            stroke-opacity: 1;
+            stroke-width: 2;
         }
 
         .node {
             cursor: pointer;
         }
 
-        .node:hover .node-rect {
-            stroke-width: 3;
-            filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));
+        .node-rect {
+            transition: stroke 0.15s;
         }
 
-        .node-source .node-rect:hover {
-            stroke: ${NODE_COLORS.SOURCE};
-        }
+        .node-source:hover .node-rect { stroke: ${NODE_COLORS.SOURCE}; }
+        .node-cte:hover .node-rect { stroke: ${NODE_COLORS.CTE}; }
+        .node-target:hover .node-rect { stroke: ${NODE_COLORS.TARGET}; }
+        .node-result:hover .node-rect { stroke: ${NODE_COLORS.RESULT}; }
 
-        .node-cte .node-rect:hover {
-            stroke: ${NODE_COLORS.CTE};
-        }
-
-        .node-target .node-rect:hover {
-            stroke: ${NODE_COLORS.TARGET};
-        }
-
-        .node-result .node-rect:hover {
-            stroke: ${NODE_COLORS.RESULT};
-        }
-
-        .node-name {
-            font-family: var(--vscode-font-family);
+        .node-name, .node-type, .node-tag {
             pointer-events: none;
         }
 
-        .node-type {
-            font-family: var(--vscode-font-family);
-            pointer-events: none;
+        /* Hovering a node: its upstream and downstream stay, everything else fades */
+        .lineage-graph.focus .node:not(.related) { opacity: 0.3; }
+        .lineage-graph.focus .edge:not(.related) { opacity: 0.12; }
+        .lineage-graph.focus .edge.related {
+            stroke: var(--vscode-focusBorder, #007acc);
+            stroke-opacity: 1;
+            stroke-width: 1.75;
         }
     `;
 }
@@ -345,24 +335,13 @@ export function getGraphStyles(): string {
  * Generate legend HTML
  */
 export function renderLegend(): string {
+    const item = (type: NodeType, label: string) => `
+            <div class="legend-item">
+                <span class="legend-tag" style="color: ${NODE_COLORS[type]}; background: ${NODE_COLORS[type]}24">${NODE_TAGS[type]}</span>
+                <span>${label}</span>
+            </div>`;
     return `
-        <div class="legend">
-            <div class="legend-item">
-                <span class="legend-color" style="background: ${NODE_COLORS.SOURCE}"></span>
-                <span>Source Table</span>
-            </div>
-            <div class="legend-item">
-                <span class="legend-color" style="background: ${NODE_COLORS.CTE}"></span>
-                <span>CTE</span>
-            </div>
-            <div class="legend-item">
-                <span class="legend-color" style="background: ${NODE_COLORS.TARGET}"></span>
-                <span>Target Table</span>
-            </div>
-            <div class="legend-item">
-                <span class="legend-color" style="background: ${NODE_COLORS.RESULT}"></span>
-                <span>Query Result</span>
-            </div>
+        <div class="legend">${item('SOURCE', 'Source table')}${item('CTE', 'CTE')}${item('TARGET', 'Target table')}${item('RESULT', 'Query result')}
         </div>
     `;
 }
